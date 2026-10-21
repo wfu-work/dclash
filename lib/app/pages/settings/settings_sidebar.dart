@@ -37,8 +37,6 @@ class SettingsSidebar extends StatelessWidget {
                   icon: const AppIcon(AppIcons.arrowLeft),
                 ),
                 const SizedBox(width: 4),
-                const AppLogo(size: 28),
-                const SizedBox(width: 9),
                 Expanded(
                   child: Text(
                     'settings'.tr,

@@ -154,18 +154,8 @@ class _SettingsViewState extends State<SettingsView> {
     BuildContext context,
     SettingsSection section,
     Widget content,
-  ) => AppPage(
-    maxContentWidth: 860,
-    title: section.titleKey.tr,
-    actions: [
-      IconButton(
-        tooltip: 'back'.tr,
-        onPressed: () => Navigator.maybePop(context),
-        icon: const AppIcon(AppIcons.close),
-      ),
-    ],
-    child: content,
-  );
+  ) =>
+      AppPage(maxContentWidth: 860, title: section.titleKey.tr, child: content);
 
   Widget _appPreferences(BuildContext context) => AppSection(
     title: 'appPreferences'.tr,
@@ -425,9 +415,7 @@ class _SettingsViewState extends State<SettingsView> {
     String? title,
   }) => AppSettingsRow(
     title: (title ?? key).tr,
-    subtitle: '${controller.settings.fields[key]}'.tr,
     trailing: AppDropdown<String>(
-      icon: const AppIcon(AppIcons.chevronDown, size: 16),
       value: controller.settings.fields[key] as String,
       items: [
         for (final value in options)

@@ -7,7 +7,6 @@ import '../../../services/core_service.dart';
 import '../../widgets/app_navigation_item.dart';
 import '../../widgets/app_widgets.dart';
 import '../../widgets/app_workspace_surface.dart';
-import '../connections/connections_view.dart';
 import '../dashboard/dashboard_view.dart';
 import '../profiles/profiles_view.dart';
 import '../proxies/proxies_view.dart';
@@ -16,39 +15,30 @@ import 'workspace_controller.dart';
 
 class WorkspaceView extends GetView<WorkspaceController> {
   const WorkspaceView({super.key});
-  static const labels = [
-    'dashboard',
-    'proxies',
-    'profiles',
-    'connections',
-    'tools',
-  ];
+  static const labels = ['dashboard', 'proxies', 'profiles', 'tools'];
   static const icons = [
     AppIcons.dashboard,
     AppIcons.globe,
     AppIcons.profile,
-    AppIcons.connections,
     AppIcons.tools,
   ];
   static const pages = <Widget>[
     DashboardView(),
     ProxiesView(),
     ProfilesView(),
-    ConnectionsView(),
     ToolsView(),
   ];
 
   @override
   Widget build(BuildContext context) => CallbackShortcuts(
     bindings: {
-      for (var i = 0; i < 5; i++) ...{
+      for (var i = 0; i < labels.length; i++) ...{
         SingleActivator(
           [
             LogicalKeyboardKey.digit1,
             LogicalKeyboardKey.digit2,
             LogicalKeyboardKey.digit3,
             LogicalKeyboardKey.digit4,
-            LogicalKeyboardKey.digit5,
           ][i],
           meta: true,
         ): () =>
@@ -59,7 +49,6 @@ class WorkspaceView extends GetView<WorkspaceController> {
             LogicalKeyboardKey.digit2,
             LogicalKeyboardKey.digit3,
             LogicalKeyboardKey.digit4,
-            LogicalKeyboardKey.digit5,
           ][i],
           control: true,
         ): () =>
@@ -155,7 +144,7 @@ class WorkspaceView extends GetView<WorkspaceController> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'appName'.tr,
+                      'brandName'.tr,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
@@ -219,11 +208,10 @@ class WorkspaceView extends GetView<WorkspaceController> {
           icon: AppIcons.settings,
           selected: false,
           onTap: () => controller.openSettings(context),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Text(
+          trailing: Text(
             'dclash 0.1.0',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall,
           ),
         ),

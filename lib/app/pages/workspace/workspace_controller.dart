@@ -8,7 +8,7 @@ class WorkspaceController extends GetxController {
   final visited = <int>{0}.obs;
 
   void select(int value) {
-    if (value < 0 || value > 4) return;
+    if (value < 0 || value > 3) return;
     visited.add(value);
     index.value = value;
   }

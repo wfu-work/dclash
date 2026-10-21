@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SIZE = 1024
 # Keep the mark crisp at 16–20 px while giving the internal ribbons a little
 # more visual weight than the previous hairline treatment.
-STROKE = 40
+STROKE = 42
 
 
 def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> None:
@@ -49,16 +49,16 @@ def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> No
     )
 
     # Eyes are open geometric chevrons rather than filled shapes.
-    line([(350, 458), (414, 425), (456, 470)], width=32)
-    line([(568, 470), (610, 425), (674, 458)], width=32)
+    line([(350, 458), (414, 425), (456, 470)], width=36)
+    line([(568, 470), (610, 425), (674, 458)], width=36)
 
     # Two crossing ribbons create the interlaced dclash signature.
-    line([(300, 520), (440, 630), (512, 585), (584, 630), (724, 520)], width=34)
-    line([(300, 650), (440, 535), (512, 585), (584, 535), (724, 650)], width=34)
+    line([(300, 520), (440, 630), (512, 585), (584, 630), (724, 520)], width=38)
+    line([(300, 650), (440, 535), (512, 585), (584, 535), (724, 650)], width=38)
 
     # Small diamond nose and a centred mouth keep the face readable at 16 px.
-    line([(512, 525), (538, 548), (512, 571), (486, 548), (512, 525)], width=30)
-    line([(512, 571), (512, 610)], width=30)
+    line([(512, 525), (538, 548), (512, 571), (486, 548), (512, 525)], width=34)
+    line([(512, 571), (512, 610)], width=34)
 
 
 def _icon(
@@ -90,16 +90,22 @@ dark = _icon(black, white)
 light.save(brand / "app_icon.png")
 dark.save(brand / "app_icon_dark.png")
 
-# Xcode's default Dock icon. Keep the macOS artwork transparent so AppKit does
-# not present an opaque white/black tile with a grey edge in the Dock. The
-# Flutter, Android and Windows marks above intentionally keep their solid brand
-# backgrounds.
+# Transparent marks used inside the application UI. Keep the opaque variants
+# for launchers and the Dock, where a solid theme-aware tile is intentional.
+logo_light = _icon(transparent, black)
+logo_dark = _icon(transparent, white)
+logo_light.save(brand / "app_logo.png")
+logo_dark.save(brand / "app_logo_dark.png")
+
+# Xcode's Dock icon uses the same opaque brand backgrounds as the Flutter,
+# Android and Windows marks. This prevents macOS from compositing a grey,
+# translucent tile behind the transparent artwork.
 app_icon_set = ROOT / "macos/Runner/Assets.xcassets/AppIcon.appiconset"
 app_icon_set.mkdir(parents=True, exist_ok=True)
 for old in app_icon_set.glob("app_icon_*.png"):
     old.unlink()
-light_dock = _icon(transparent, black)
-dark_dock = _icon(transparent, white)
+light_dock = light
+dark_dock = dark
 _write_scaled(
     light_dock,
     app_icon_set / "app_icon_aqua.png",

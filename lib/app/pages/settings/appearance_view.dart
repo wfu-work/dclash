@@ -15,13 +15,15 @@ class AppearanceView extends GetView<SettingsController> {
     final page = AppPage(
       maxContentWidth: 820,
       title: 'appearance'.tr,
-      actions: [
-        IconButton(
-          tooltip: 'back'.tr,
-          onPressed: () => Navigator.pop(context),
-          icon: const AppIcon(AppIcons.close),
-        ),
-      ],
+      actions: embedded
+          ? const []
+          : [
+              IconButton(
+                tooltip: 'back'.tr,
+                onPressed: () => Navigator.pop(context),
+                icon: const AppIcon(AppIcons.close),
+              ),
+            ],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -28,14 +28,18 @@ class ProfileCard extends StatelessWidget {
         ? (used / profile.total).clamp(0.0, 1.0)
         : null;
     final expired = profile.expiresAt?.isBefore(DateTime.now()) ?? false;
+    final iconColor = active ? colors.primary : colors.onSurfaceVariant;
+    final cardColor = colors.surfaceContainerHigh;
     return Material(
-      color: active ? colors.primaryContainer : colors.surfaceContainerHigh,
+      color: active
+          ? Color.alphaBlend(colors.primary.withValues(alpha: .06), cardColor)
+          : cardColor,
       shape: AppShapes.card.copyWith(
         side: BorderSide(
           color: active
-              ? colors.primary.withValues(alpha: .5)
+              ? colors.primary.withValues(alpha: .65)
               : colors.outlineVariant,
-          width: .5,
+          width: active ? 1 : .5,
         ),
       ),
       clipBehavior: Clip.antiAlias,
@@ -50,12 +54,23 @@ class ProfileCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  AppIcon(
-                    profile.source == ProfileSource.remote
-                        ? AppIcons.cloud
-                        : AppIcons.profile,
-                    color: active ? colors.primary : colors.onSurfaceVariant,
-                    size: 22,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: .1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: SizedBox.square(
+                      dimension: 36,
+                      child: Center(
+                        child: AppIcon(
+                          profile.source == ProfileSource.remote
+                              ? AppIcons.cloud
+                              : AppIcons.profile,
+                          color: iconColor,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -130,10 +145,10 @@ class ProfileCard extends StatelessWidget {
                 const SizedBox(height: 9),
                 LinearProgressIndicator(
                   value: fraction ?? 0,
-                  minHeight: 5,
+                  minHeight: 7,
                   borderRadius: BorderRadius.circular(8),
                   color: expired ? colors.error : colors.primary,
-                  backgroundColor: colors.surfaceContainerHighest,
+                  backgroundColor: colors.outlineVariant,
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -172,16 +187,42 @@ class ProfileCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: busy || active ? null : onActivate,
-                    icon: AppIcon(
-                      active ? AppIcons.checkCircle : AppIcons.playCircle,
-                      size: 17,
+                  if (active)
+                    DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: colors.primary.withValues(alpha: .1),
+                        shape: AppShapes.pill,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AppIcon(
+                              AppIcons.checkCircle,
+                              size: 17,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'profileActive'.tr,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    TextButton.icon(
+                      onPressed: busy ? null : onActivate,
+                      icon: const AppIcon(AppIcons.playCircle, size: 17),
+                      label: Text('profileActivate'.tr),
                     ),
-                    label: Text(
-                      active ? 'profileActive'.tr : 'profileActivate'.tr,
-                    ),
-                  ),
                 ],
               ),
             ],

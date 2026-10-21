@@ -69,7 +69,7 @@ void main() {
           await tester.runAsync(
             () => Get.find<SettingsService>().set('themeMode', mode),
           );
-          for (var i = 0; i < 5; i++) {
+          for (var i = 0; i < 4; i++) {
             Get.find<WorkspaceController>().select(i);
             await tester.pumpAndSettle();
             expect(
@@ -209,7 +209,7 @@ void main() {
     );
     await tester.pumpWidget(const CloudriftApp());
     await tester.pumpAndSettle();
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 4; i++) {
       Get.find<WorkspaceController>().select(i);
       await tester.pumpAndSettle();
       final error = tester.takeException();

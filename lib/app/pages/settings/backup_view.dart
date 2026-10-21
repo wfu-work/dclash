@@ -90,13 +90,15 @@ class _BackupViewState extends State<BackupView> {
     final page = AppPage(
       maxContentWidth: 820,
       title: 'backup'.tr,
-      actions: [
-        IconButton(
-          tooltip: 'back'.tr,
-          onPressed: () => Navigator.pop(context),
-          icon: const AppIcon(AppIcons.close),
-        ),
-      ],
+      actions: widget.embedded
+          ? const []
+          : [
+              IconButton(
+                tooltip: 'back'.tr,
+                onPressed: () => Navigator.pop(context),
+                icon: const AppIcon(AppIcons.close),
+              ),
+            ],
       child: IgnorePointer(
         ignoring: _busy,
         child: Column(

@@ -44,7 +44,7 @@ class StatusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  active ? 'appTagline'.tr : 'appName'.tr,
+                  active ? 'appTagline'.tr : 'brandName'.tr,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w500,
                   ),

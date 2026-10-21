@@ -126,15 +126,20 @@ class ProxiesView extends GetView<ProxiesController> {
         const SizedBox(height: 16),
         Expanded(
           child: Obx(() {
-            final groups = controller.core.groups.toList();
+            final groups = controller.groups;
             final group = controller.group;
             final grid = controller.grid.value;
+            if (controller.previewLoading.value && groups.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
             if (groups.isEmpty || group == null) {
               return AppEmpty(
                 icon: AppIcons.connections,
                 title: 'proxyEmpty'.tr,
                 message: controller.core.running
                     ? 'proxyEmptyRunning'.tr
+                    : controller.hasActiveProfile
+                    ? 'proxyEmptyConfig'.tr
                     : 'featureStartCore'.tr,
               );
             }

@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../../../configs/theme/app_theme.dart';
 import '../../../domains/clash_profile.dart';
 import '../../../services/script_library_service.dart';
 import '../../../storage/atomic_file.dart';
@@ -238,41 +237,11 @@ class ProfilesView extends GetView<ProfilesController> {
               ),
             ),
           ],
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-            decoration: ShapeDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              shape: AppShapes.control,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (controller.busy.contains('import'))
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  )
-                else
-                  AppIcon(
-                    AppIcons.add,
-                    size: 19,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    'profileAdd'.tr,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          child: AppButton(
+            label: 'profileAdd'.tr,
+            icon: AppIcons.add,
+            busy: controller.busy.contains('import'),
+            interactive: false,
           ),
         ),
       ),

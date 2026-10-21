@@ -12,6 +12,7 @@ class AppTranslations extends Translations {
 
   static const _zh = <String, String>{
     'appName': 'dclash',
+    'brandName': '云渡',
     'appTagline': '让连接，自由流动。',
     'dashboard': '仪表盘',
     'dashboardLayout': '编辑仪表盘',
@@ -191,6 +192,7 @@ class AppTranslations extends Translations {
 
   static const _en = <String, String>{
     'appName': 'dclash',
+    'brandName': 'dclash',
     'appTagline': 'Let your connections flow.',
     'dashboard': 'Dashboard',
     'dashboardLayout': 'Edit dashboard',

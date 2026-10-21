@@ -11,12 +11,14 @@ class AppNavigationItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.vertical = false,
+    this.trailing,
   });
 
   final String label;
   final IconData icon;
   final bool selected, vertical;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +66,10 @@ class AppNavigationItem extends StatelessWidget {
                           symbol,
                           const SizedBox(width: 12),
                           Expanded(child: text),
+                          if (trailing != null) ...[
+                            const SizedBox(width: 8),
+                            Flexible(fit: FlexFit.loose, child: trailing!),
+                          ],
                         ],
                       ),
               ),

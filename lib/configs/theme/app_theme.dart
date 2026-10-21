@@ -137,14 +137,30 @@ abstract final class AppTheme {
       borderSide: border,
     );
     final buttonStyle = ButtonStyle(
-      minimumSize: const WidgetStatePropertyAll(Size(40, 36)),
+      minimumSize: const WidgetStatePropertyAll(Size(40, 40)),
       padding: const WidgetStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       ),
       shape: const WidgetStatePropertyAll(AppShapes.control),
       textStyle: WidgetStatePropertyAll(text.labelLarge),
       iconSize: const WidgetStatePropertyAll(16),
       elevation: const WidgetStatePropertyAll(0),
+    );
+    final contrastButtonStyle = buttonStyle.copyWith(
+      backgroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? colors.onSurface.withValues(alpha: .12)
+            : dark
+            ? Colors.white
+            : Colors.black,
+      ),
+      foregroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.disabled)
+            ? colors.onSurfaceVariant
+            : dark
+            ? Colors.black
+            : Colors.white,
+      ),
     );
     return ThemeData(
       useMaterial3: true,
@@ -245,7 +261,7 @@ abstract final class AppTheme {
           borderSide: BorderSide(color: colors.error),
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(style: buttonStyle),
+      filledButtonTheme: FilledButtonThemeData(style: contrastButtonStyle),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: buttonStyle.copyWith(side: WidgetStatePropertyAll(border)),
       ),

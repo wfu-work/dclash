@@ -105,10 +105,7 @@ custom-extension:
       await tester.pumpAndSettle();
       final enabledRow = find.byKey(const ValueKey('enable'));
       await tester.tap(
-        find.descendant(
-          of: enabledRow,
-          matching: find.byType(DropdownButton<String>),
-        ),
+        find.descendant(of: enabledRow, matching: find.byType(OutlinedButton)),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Off').last);

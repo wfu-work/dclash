@@ -8,7 +8,7 @@ class AppLogo extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Image.asset(
-      isDark ? 'assets/brand/app_icon_dark.png' : 'assets/brand/app_icon.png',
+      isDark ? 'assets/brand/app_logo_dark.png' : 'assets/brand/app_logo.png',
       width: size,
       height: size,
       semanticLabel: 'dclash',

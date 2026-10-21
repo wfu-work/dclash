@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../widgets/app_widgets.dart';
+import '../connections/connections_view.dart';
 import '../connections/feed_view.dart';
 import '../logs/logs_view.dart';
 import '../settings/providers_view.dart';
@@ -22,6 +23,15 @@ class ToolsView extends StatelessWidget {
           title: 'diagnostics'.tr,
           child: Column(
             children: [
+              _row(
+                context,
+                'connections',
+                AppIcons.connections,
+                const _FeatureRoute(
+                  title: 'connections',
+                  child: ConnectionsView(),
+                ),
+              ),
               _row(
                 context,
                 'requests',

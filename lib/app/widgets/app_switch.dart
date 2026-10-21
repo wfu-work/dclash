@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 /// codexc-flutter. Its hit target stays at 48 logical pixels so the control
 /// remains easy to operate with a mouse, keyboard, or touch input.
 class AppSwitch extends StatelessWidget {
+  static const visualScale = .65;
+
   const AppSwitch({
     super.key,
     required this.value,
@@ -41,7 +43,7 @@ class AppSwitch extends StatelessWidget {
       child: SizedBox.square(
         dimension: 48,
         child: Transform.scale(
-          scale: .75,
+          scale: visualScale,
           transformHitTests: false,
           child: control,
         ),
