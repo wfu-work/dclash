@@ -71,9 +71,7 @@ class ConnectionDetails extends StatelessWidget {
                 ),
               );
               if (context.mounted) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text('featureCopied'.tr)));
+                AppMessage.success(context, 'featureCopied'.tr);
               }
             } catch (error) {
               if (context.mounted) showAppError(context, error);

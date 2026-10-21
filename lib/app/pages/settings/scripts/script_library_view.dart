@@ -143,9 +143,7 @@ class ScriptLibraryView extends GetView<ScriptLibraryService> {
                     : () => _run(context, () async {
                         await controller.refreshRemote(item.id);
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('scriptRefreshed'.tr)),
-                          );
+                          AppMessage.success(context, 'scriptRefreshed'.tr);
                         }
                       }),
                 icon: const AppIcon(AppIcons.refresh),

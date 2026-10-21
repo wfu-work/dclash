@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'app_message.dart';
+
 abstract final class AppDialogs {
   static Future<String?> prompt(
     BuildContext context, {
@@ -82,11 +84,5 @@ abstract final class AppDialogs {
 }
 
 void showAppError(BuildContext context, Object error) {
-  final message = error.toString().replaceFirst(
-    RegExp(r'^(Exception|StateError|Bad state):\s*'),
-    '',
-  );
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-  );
+  AppMessage.error(context, error);
 }

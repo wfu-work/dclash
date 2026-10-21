@@ -29,9 +29,7 @@ class _EffectiveConfigViewState extends State<EffectiveConfigView> {
     try {
       final exported = await widget.onExport();
       if (exported && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('featureExported'.tr)));
+        AppMessage.success(context, 'featureExported'.tr);
       }
     } catch (error) {
       if (mounted) showAppError(context, error);
@@ -44,9 +42,7 @@ class _EffectiveConfigViewState extends State<EffectiveConfigView> {
     try {
       await Clipboard.setData(ClipboardData(text: widget.exportContent));
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('featureCopied'.tr)));
+        AppMessage.success(context, 'featureCopied'.tr);
       }
     } catch (error) {
       if (mounted) showAppError(context, error);

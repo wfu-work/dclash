@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:tray/tray.dart';
 import 'package:window/window.dart';
 
+import '../app/widgets/app_message.dart';
 import '../domains/clash_connection.dart';
 import '../domains/core_status.dart';
 import 'core_service.dart';
@@ -251,9 +252,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     }
     final context = Get.context;
     if (context != null && context.mounted) {
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('$error')));
+      AppMessage.error(context, error);
     }
   }
 

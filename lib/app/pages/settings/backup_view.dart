@@ -51,9 +51,7 @@ class _BackupViewState extends State<BackupView> {
         completed = await operation();
       }
       if (completed && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message.tr)));
+        AppMessage.success(context, message.tr);
       }
     } on Object catch (error) {
       if (mounted) showAppError(context, error);

@@ -233,6 +233,14 @@ abstract final class AppTheme {
         dragHandleSize: const Size(32, 3),
         dragHandleColor: colors.outline,
       ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        backgroundColor: card,
+        contentTextStyle: text.bodyMedium,
+        insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: AppShapes.control.copyWith(side: border),
+      ),
       inputDecorationTheme: InputDecorationThemeData(
         filled: true,
         fillColor: card,

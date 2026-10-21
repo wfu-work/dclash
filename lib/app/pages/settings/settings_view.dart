@@ -550,29 +550,28 @@ class _SettingsViewState extends State<SettingsView> {
     CoreStatus.stopped || CoreStatus.failed => false,
   };
 
-  Future<void> _manageHelper(
-    BuildContext context,
-    bool uninstall,
-  ) => _run(context, () async {
-    if (_helperCoreActive) throw StateError('helperStopFirst'.tr);
-    final confirmed = await AppDialogs.confirm(
-      context,
-      title: (uninstall ? 'helperUninstall' : 'helperInstall').tr,
-      message:
-          (uninstall ? 'helperUninstallConfirm' : 'helperInstallConfirm').tr,
-    );
-    if (!confirmed || !context.mounted) return;
-    if (_helperCoreActive) throw StateError('helperStopFirst'.tr);
-    await controller.core.invoke(
-      uninstall ? 'uninstallHelper' : 'installHelper',
-    );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text((uninstall ? 'helperUninstalled' : 'helperInstalled').tr),
-      ),
-    );
-  });
+  Future<void> _manageHelper(BuildContext context, bool uninstall) => _run(
+    context,
+    () async {
+      if (_helperCoreActive) throw StateError('helperStopFirst'.tr);
+      final confirmed = await AppDialogs.confirm(
+        context,
+        title: (uninstall ? 'helperUninstall' : 'helperInstall').tr,
+        message:
+            (uninstall ? 'helperUninstallConfirm' : 'helperInstallConfirm').tr,
+      );
+      if (!confirmed || !context.mounted) return;
+      if (_helperCoreActive) throw StateError('helperStopFirst'.tr);
+      await controller.core.invoke(
+        uninstall ? 'uninstallHelper' : 'installHelper',
+      );
+      if (!context.mounted) return;
+      AppMessage.success(
+        context,
+        (uninstall ? 'helperUninstalled' : 'helperInstalled').tr,
+      );
+    },
+  );
 
   static void showAbout(BuildContext context) => showAboutDialog(
     context: context,

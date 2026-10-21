@@ -4,6 +4,7 @@ export 'app_button.dart';
 export 'app_checked_menu_item.dart';
 export 'app_logo.dart';
 export 'app_dialogs.dart';
+export 'app_message.dart';
 export 'app_dropdown.dart';
 export 'app_icon.dart';
 export 'app_empty.dart';

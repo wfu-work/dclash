@@ -27,9 +27,7 @@ class LogsView extends GetView<LogsController> {
       _run(context, () async {
         await Clipboard.setData(ClipboardData(text: value));
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('featureCopied'.tr)));
+          AppMessage.success(context, 'featureCopied'.tr);
         }
       });
   Future<void> _export(BuildContext context) => _run(context, () async {
@@ -43,9 +41,7 @@ class LogsView extends GetView<LogsController> {
     if (path != null) {
       await File(path).writeAsString(content);
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('featureExported'.tr)));
+        AppMessage.success(context, 'featureExported'.tr);
       }
     }
   });

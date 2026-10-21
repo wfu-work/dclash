@@ -190,7 +190,7 @@ class ProfilesView extends GetView<ProfilesController> {
   });
 
   void _message(BuildContext context, String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      AppMessage.success(context, text);
 
   @override
   Widget build(BuildContext context) => AppPage(
