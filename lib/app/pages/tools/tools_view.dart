@@ -100,21 +100,13 @@ class _FeatureRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     body: SafeArea(
-      child: Column(
-        children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 0, 0),
-              child: IconButton(
-                tooltip: 'back'.tr,
-                onPressed: () => Navigator.pop(context),
-                icon: const AppIcon(AppIcons.arrowLeft),
-              ),
-            ),
-          ),
-          Expanded(child: child),
-        ],
+      child: AppPageLeading(
+        leading: IconButton(
+          tooltip: 'back'.tr,
+          onPressed: () => Navigator.pop(context),
+          icon: const AppIcon(AppIcons.arrowLeft),
+        ),
+        child: child,
       ),
     ),
   );

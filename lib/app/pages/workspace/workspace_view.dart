@@ -22,6 +22,8 @@ class WorkspaceView extends GetView<WorkspaceController> {
     AppIcons.profile,
     AppIcons.tools,
   ];
+  static const dockLabels = [...labels, 'settings'];
+  static const dockIcons = [...icons, AppIcons.settings];
   static const pages = <Widget>[
     DashboardView(),
     ProxiesView(),
@@ -236,15 +238,17 @@ class WorkspaceView extends GetView<WorkspaceController> {
         child: Obx(
           () => Row(
             children: [
-              for (var i = 0; i < labels.length; i++) ...[
+              for (var i = 0; i < dockLabels.length; i++) ...[
                 if (i > 0) const SizedBox(width: 4),
                 Expanded(
                   child: AppNavigationItem(
-                    label: labels[i].tr,
-                    icon: icons[i],
-                    selected: controller.index.value == i,
+                    label: dockLabels[i].tr,
+                    icon: dockIcons[i],
+                    selected: i < labels.length && controller.index.value == i,
                     vertical: true,
-                    onTap: () => controller.select(i),
+                    onTap: () => i < labels.length
+                        ? controller.select(i)
+                        : controller.openSettings(context),
                   ),
                 ),
               ],

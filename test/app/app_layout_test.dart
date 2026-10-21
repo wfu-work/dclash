@@ -147,6 +147,22 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('mobile workspace exposes settings in the bottom navigation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const CloudriftApp());
+    await tester.pumpAndSettle();
+
+    final settingsItem = find.bySemanticsLabel('Settings');
+    expect(settingsItem, findsOneWidget);
+    await tester.tap(settingsItem);
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('desktop settings use grouped sidebar navigation', (
     tester,
   ) async {

@@ -4,6 +4,7 @@ class AppPage extends StatelessWidget {
   const AppPage({
     super.key,
     required this.title,
+    this.leading,
     this.subtitle,
     this.actions = const [],
     required this.child,
@@ -11,6 +12,7 @@ class AppPage extends StatelessWidget {
     this.maxContentWidth = 1200,
   });
   final String title;
+  final Widget? leading;
   final String? subtitle;
   final List<Widget> actions;
   final Widget child;
@@ -30,7 +32,9 @@ class AppPage extends StatelessWidget {
               actions.isNotEmpty &&
               ((box.maxWidth < 500) ||
                   MediaQuery.textScalerOf(context).scale(14) > 19);
-          final heading = Column(
+          final pageLeading =
+              leading ?? AppPageLeading.maybeOf(context)?.leading;
+          final headingContent = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: Theme.of(context).textTheme.headlineMedium),
@@ -40,6 +44,16 @@ class AppPage extends StatelessWidget {
               ],
             ],
           );
+          final heading = pageLeading == null
+              ? headingContent
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    pageLeading,
+                    const SizedBox(width: 2),
+                    Expanded(child: headingContent),
+                  ],
+                );
           final controls = Wrap(spacing: 6, runSpacing: 4, children: actions);
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -97,4 +111,23 @@ class AppPage extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Supplies a leading control to a nested [AppPage] without coupling feature
+/// pages to the route that opened them.
+class AppPageLeading extends InheritedWidget {
+  const AppPageLeading({
+    super.key,
+    required this.leading,
+    required super.child,
+  });
+
+  final Widget leading;
+
+  static AppPageLeading? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppPageLeading>();
+
+  @override
+  bool updateShouldNotify(AppPageLeading oldWidget) =>
+      leading != oldWidget.leading;
 }

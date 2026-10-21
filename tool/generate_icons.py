@@ -13,9 +13,8 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 SIZE = 1024
-# Keep the mark crisp at 16–20 px while giving the internal ribbons a little
-# more visual weight than the previous hairline treatment.
-STROKE = 42
+# Keep the mark legible at 16–20 px with a confident, compact line weight.
+STROKE = 54
 
 
 def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> None:
@@ -49,16 +48,16 @@ def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> No
     )
 
     # Eyes are open geometric chevrons rather than filled shapes.
-    line([(350, 458), (414, 425), (456, 470)], width=36)
-    line([(568, 470), (610, 425), (674, 458)], width=36)
+    line([(350, 458), (414, 425), (456, 470)], width=46)
+    line([(568, 470), (610, 425), (674, 458)], width=46)
 
     # Two crossing ribbons create the interlaced dclash signature.
-    line([(300, 520), (440, 630), (512, 585), (584, 630), (724, 520)], width=38)
-    line([(300, 650), (440, 535), (512, 585), (584, 535), (724, 650)], width=38)
+    line([(300, 520), (440, 630), (512, 585), (584, 630), (724, 520)], width=50)
+    line([(300, 650), (440, 535), (512, 585), (584, 535), (724, 650)], width=50)
 
     # Small diamond nose and a centred mouth keep the face readable at 16 px.
-    line([(512, 525), (538, 548), (512, 571), (486, 548), (512, 525)], width=34)
-    line([(512, 571), (512, 610)], width=34)
+    line([(512, 525), (538, 548), (512, 571), (486, 548), (512, 525)], width=44)
+    line([(512, 571), (512, 610)], width=44)
 
 
 def _icon(
