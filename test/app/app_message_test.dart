@@ -1,4 +1,5 @@
 import 'package:dclash_flutter/app/widgets/app_message.dart';
+import 'package:dclash_flutter/app/widgets/app_icon.dart';
 import 'package:dclash_flutter/configs/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,21 +32,45 @@ void main() {
     expect(AppMessage.formatError('plain message'), 'plain message');
   });
 
-  testWidgets('shows a floating message using the application theme', (
-    tester,
-  ) async {
+  testWidgets('shows a compact top message with a tone icon', (tester) async {
     await tester.pumpWidget(
       _messageHarness(() => AppMessage.success(_context(tester), 'Saved')),
     );
     await tester.tap(find.text('show message'));
     await tester.pump();
 
-    expect(find.byType(SnackBar), findsOneWidget);
+    final message = find.byType(AppMessage);
+    expect(message, findsOneWidget);
     expect(find.text('Saved'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is AppIcon && widget.icon == AppIcons.checkCircle,
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getRect(message).top, lessThan(100));
+    expect(tester.getRect(message).width, lessThan(300));
     expect(
       Theme.of(_context(tester)).snackBarTheme.behavior,
       SnackBarBehavior.floating,
     );
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('uses a warning icon for warning messages', (tester) async {
+    await tester.pumpWidget(
+      _messageHarness(() => AppMessage.warning(_context(tester), 'Check this')),
+    );
+    await tester.tap(find.text('show message'));
+    await tester.pump();
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is AppIcon && widget.icon == AppIcons.warning,
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('replaces the currently visible message', (tester) async {
@@ -61,6 +86,7 @@ void main() {
 
     expect(find.text('First'), findsNothing);
     expect(find.text('Second'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('error messages keep the cleaned user-facing text', (
@@ -76,6 +102,7 @@ void main() {
 
     expect(find.text('Could not connect'), findsOneWidget);
     expect(find.text('StateError: Could not connect'), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
   });
 
   test('application themes configure codexc-style floating messages', () {

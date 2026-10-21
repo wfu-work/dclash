@@ -303,7 +303,7 @@ class ProfilesView extends GetView<ProfilesController> {
                       1,
                       4,
                     ),
-                    mainAxisExtent: 270,
+                    mainAxisExtent: 300,
                     crossAxisSpacing: 16,
                     mainAxisSpacing: 16,
                   ),

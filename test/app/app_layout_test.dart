@@ -9,6 +9,7 @@ import 'package:dclash_flutter/app/pages/workspace/workspace_controller.dart';
 import 'package:dclash_flutter/app/widgets/app_dialogs.dart';
 import 'package:dclash_flutter/app/widgets/app_navigation_item.dart';
 import 'package:dclash_flutter/app/widgets/app_system_ui.dart';
+import 'package:dclash_flutter/app/widgets/connect_button.dart';
 import 'package:dclash_flutter/configs/localization/app_translations.dart';
 import 'package:dclash_flutter/domains/clash_profile.dart';
 import 'package:dclash_flutter/domains/core_status.dart';
@@ -225,6 +226,10 @@ void main() {
     );
     await tester.pumpWidget(const CloudriftApp());
     await tester.pumpAndSettle();
+    expect(find.byType(ConnectButton), findsNothing);
+    expect(find.text('Outbound mode'), findsOneWidget);
+    expect(find.text('Allow LAN'), findsOneWidget);
+    expect(find.text('Mixed proxy port'), findsOneWidget);
     for (var i = 0; i < 4; i++) {
       Get.find<WorkspaceController>().select(i);
       await tester.pumpAndSettle();

@@ -31,9 +31,7 @@ class ProfileCard extends StatelessWidget {
     final iconColor = active ? colors.primary : colors.onSurfaceVariant;
     final cardColor = colors.surfaceContainerHigh;
     return Material(
-      color: active
-          ? Color.alphaBlend(colors.primary.withValues(alpha: .06), cardColor)
-          : cardColor,
+      color: cardColor,
       shape: AppShapes.card.copyWith(
         side: BorderSide(
           color: active
@@ -161,6 +159,35 @@ class ProfileCard extends StatelessWidget {
                     color: expired ? colors.error : colors.onSurfaceVariant,
                   ),
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _metric(
+                      context,
+                      AppIcons.arrowUp,
+                      'profileUpload'.tr,
+                      formatBytes(profile.upload),
+                    ),
+                    const SizedBox(width: 12),
+                    _metric(
+                      context,
+                      AppIcons.arrowDown,
+                      'profileDownload'.tr,
+                      formatBytes(profile.download),
+                    ),
+                    const SizedBox(width: 12),
+                    _metric(
+                      context,
+                      AppIcons.refresh,
+                      'profileUpdateInterval'.tr,
+                      profile.autoUpdateHours > 0
+                          ? 'profileUpdateEveryHours'.trParams({
+                              'hours': '${profile.autoUpdateHours}',
+                            })
+                          : 'profileUpdateManual'.tr,
+                    ),
+                  ],
+                ),
               ] else
                 Text(
                   'profileLocalDescription'.tr,
@@ -228,6 +255,46 @@ class ProfileCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _metric(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AppIcon(icon, size: 14, color: colors.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelLarge,
+          ),
+        ],
       ),
     );
   }

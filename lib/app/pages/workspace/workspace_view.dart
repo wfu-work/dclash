@@ -19,8 +19,12 @@ class WorkspaceView extends GetView<WorkspaceController> {
   static const icons = [
     AppIcons.dashboard,
     AppIcons.globe,
-    AppIcons.profile,
-    AppIcons.tools,
+    // Keep the workspace navigation on the same open Lucide outline family.
+    // Layers communicates assembled proxy configuration more clearly than a
+    // document glyph, while terminal gives the tools area a distinct,
+    // technical entry point without the heavier briefcase silhouette.
+    AppIcons.layers,
+    AppIcons.terminal,
   ];
   static const dockLabels = [...labels, 'settings'];
   static const dockIcons = [...icons, AppIcons.settings];
@@ -210,12 +214,6 @@ class WorkspaceView extends GetView<WorkspaceController> {
           icon: AppIcons.settings,
           selected: false,
           onTap: () => controller.openSettings(context),
-          trailing: Text(
-            'dclash 0.1.0',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
         ),
       ],
     ),

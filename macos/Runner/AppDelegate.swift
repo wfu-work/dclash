@@ -8,10 +8,9 @@ class AppDelegate: FlutterAppDelegate {
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
-    updateDockIcon()
-    appearanceObservation = NSApp.observe(\NSApplication.effectiveAppearance, options: [.new]) { [weak self] _, _ in
+    appearanceObservation = NSApp.observe(\NSApplication.effectiveAppearance, options: [.initial, .new]) { [weak self] app, _ in
       DispatchQueue.main.async {
-        self?.updateDockIcon()
+        self?.updateDockIcon(for: app.effectiveAppearance)
       }
     }
   }
@@ -22,11 +21,13 @@ class AppDelegate: FlutterAppDelegate {
     super.applicationWillTerminate(notification)
   }
 
-  private func updateDockIcon() {
-    let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-    if let image = NSImage(named: isDark ? "DclashLogoDarkAqua" : "DclashLogoAqua") {
+  private func updateDockIcon(for appearance: NSAppearance) {
+    let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+    let name = NSImage.Name(isDark ? "DclashDockIconDark" : "DclashDockIconLight")
+    if let image = NSImage(named: name) {
       image.isTemplate = false
       NSApp.applicationIconImage = image
+      NSApp.dockTile.display()
     }
   }
 

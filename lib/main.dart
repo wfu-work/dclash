@@ -9,7 +9,6 @@ import 'app/widgets/app_system_ui.dart';
 import 'configs/app_initializer.dart';
 import 'configs/theme/app_theme.dart';
 import 'services/core_service.dart';
-import 'services/settings_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,9 +18,11 @@ Future<void> main() async {
       preview: const bool.fromEnvironment('DC_PREVIEW'),
     );
     runApp(const CloudriftApp());
-    if (Get.find<SettingsService>().fields['autoStart'] == true) {
+    final core = Get.find<CoreService>();
+    if (!const bool.fromEnvironment('DC_PREVIEW') &&
+        core.profiles.active != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(Get.find<CoreService>().start().catchError((Object _) {}));
+        unawaited(core.start().catchError((Object _) {}));
       });
     }
   } on Object catch (error) {

@@ -12,6 +12,38 @@ import '../domains/core_status.dart';
 import 'core_service.dart';
 import 'settings_service.dart';
 
+/// Labels used by the native tray menu.
+///
+/// The tray is owned by the operating system and can outlive the Flutter
+/// widget tree. Keep its labels independent from the app locale so a stale
+/// GetX translation (for example, the key itself) never leaks into the menu.
+abstract final class DesktopTrayText {
+  static const _values = <String, String>{
+    'hideWindow': '隐藏窗口',
+    'showWindow': '显示窗口',
+    'status': '运行状态',
+    'stopped': '未连接',
+    'starting': '正在连接',
+    'running': '运行中',
+    'stopping': '正在断开',
+    'failed': '连接失败',
+    'start': '连接',
+    'stop': '断开',
+    'outboundMode': '出站模式',
+    'rule': '规则',
+    'global': '全局',
+    'direct': '直连',
+    'systemProxy': '系统代理',
+    'tun': 'TUN 模式',
+    'allowLan': '允许局域网连接',
+    'minimizeToTray': '关闭窗口时最小化到托盘',
+    'launchAtLogin': '开机启动',
+    'quit': '退出 dclash',
+  };
+
+  static String label(String key) => _values[key] ?? key;
+}
+
 class DesktopIntegrationService extends GetxService with WindowListener {
   DesktopIntegrationService(
     this.core,
@@ -122,22 +154,24 @@ class DesktopIntegrationService extends GetxService with WindowListener {
           isTemplate: Platform.isMacOS,
           size: 20,
         ),
-        toolTip: 'dclash · ${core.status.value.name.tr}',
+        toolTip: 'dclash · ${DesktopTrayText.label(core.status.value.name)}',
         menu: [
           TrayMenuAction(
-            label: (_windowVisible ? 'hideWindow' : 'showWindow').tr,
+            label: DesktopTrayText.label(
+              _windowVisible ? 'hideWindow' : 'showWindow',
+            ),
             onSelected: () => unawaited(
               (_windowVisible ? _hideToTray() : _show()).catchError(_report),
             ),
           ),
           const TrayMenuSeparator(),
           TrayMenuAction(
-            label: 'status'.tr,
-            detail: core.status.value.name.tr,
+            label: DesktopTrayText.label('status'),
+            detail: DesktopTrayText.label(core.status.value.name),
             enabled: false,
           ),
           TrayMenuAction(
-            label: (core.running ? 'stop' : 'start').tr,
+            label: DesktopTrayText.label(core.running ? 'stop' : 'start'),
             enabled: !const [
               CoreStatus.starting,
               CoreStatus.stopping,
@@ -145,11 +179,11 @@ class DesktopIntegrationService extends GetxService with WindowListener {
             onSelected: () => unawaited(core.toggle().catchError(_report)),
           ),
           TrayMenuSubmenu(
-            label: 'outboundMode'.tr,
+            label: DesktopTrayText.label('outboundMode'),
             items: [
               for (final mode in ['rule', 'global', 'direct'])
                 TrayMenuCheckbox(
-                  label: mode.tr,
+                  label: DesktopTrayText.label(mode),
                   checked: settings.fields['mode'] == mode,
                   enabled: !_busy,
                   onSelected: () =>
@@ -180,7 +214,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
             const TrayMenuSeparator(),
           ],
           TrayMenuCheckbox(
-            label: 'systemProxy'.tr,
+            label: DesktopTrayText.label('systemProxy'),
             checked: settings.fields['systemProxy'] == true,
             enabled: !_busy,
             onSelected: () => unawaited(
@@ -191,7 +225,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
             ),
           ),
           TrayMenuCheckbox(
-            label: 'tun'.tr,
+            label: DesktopTrayText.label('tun'),
             checked: settings.fields['tunEnabled'] == true,
             enabled: !_busy,
             onSelected: () => unawaited(
@@ -202,7 +236,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
             ),
           ),
           TrayMenuCheckbox(
-            label: 'allowLan'.tr,
+            label: DesktopTrayText.label('allowLan'),
             checked: settings.fields['allowLan'] == true,
             enabled: !_busy,
             onSelected: () => unawaited(
@@ -213,22 +247,20 @@ class DesktopIntegrationService extends GetxService with WindowListener {
             ),
           ),
           TrayMenuCheckbox(
-            label: 'minimizeToTray'.tr,
+            label: DesktopTrayText.label('minimizeToTray'),
             checked: settings.fields['minimizeToTray'] == true,
             onSelected: () => unawaited(_setMinimizeToTray()),
           ),
           TrayMenuCheckbox(
-            label: 'autoStart'.tr,
-            checked: settings.fields['autoStart'] == true,
-            onSelected: () => unawaited(_setAutoStart()),
-          ),
-          TrayMenuCheckbox(
-            label: 'launchAtLogin'.tr,
+            label: DesktopTrayText.label('launchAtLogin'),
             checked: settings.fields['launchAtLogin'] == true,
             onSelected: () => unawaited(_setLaunchAtLogin()),
           ),
           const TrayMenuSeparator(),
-          TrayMenuAction(label: 'quit'.tr, onSelected: () => unawaited(quit())),
+          TrayMenuAction(
+            label: DesktopTrayText.label('quit'),
+            onSelected: () => unawaited(quit()),
+          ),
         ],
       ),
     );
@@ -262,14 +294,6 @@ class DesktopIntegrationService extends GetxService with WindowListener {
         'minimizeToTray',
         settings.fields['minimizeToTray'] != true,
       );
-    } on Object catch (error) {
-      _report(error);
-    }
-  }
-
-  Future<void> _setAutoStart() async {
-    try {
-      await settings.set('autoStart', settings.fields['autoStart'] != true);
     } on Object catch (error) {
       _report(error);
     }

@@ -42,6 +42,7 @@ abstract final class AppIcons {
   static const drag = Icons.drag_handle_rounded;
   static const edit = Icons.edit_note_rounded;
   static const error = Icons.error_outline_rounded;
+  static const warning = Icons.warning_amber_outlined;
   static const fileOpen = Icons.file_open_outlined;
   static const filterOff = Icons.filter_alt_off_outlined;
   static const filter = Icons.filter_alt_rounded;

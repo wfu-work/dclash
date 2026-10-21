@@ -50,13 +50,14 @@ class _DashboardLayoutViewState extends State<DashboardLayoutView> {
     body: SafeArea(
       child: AppPage(
         title: 'dashboardLayout'.tr,
+        leading: IconButton(
+          tooltip: 'back'.tr,
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          icon: const AppIcon(AppIcons.arrowLeft),
+        ),
         subtitle: 'dashboardLayoutHint'.tr,
         scroll: false,
         actions: [
-          TextButton(
-            onPressed: _saving ? null : () => Navigator.pop(context),
-            child: Text('cancel'.tr),
-          ),
           FilledButton(
             onPressed: _saving || _visible.isEmpty ? null : _save,
             child: Text('save'.tr),

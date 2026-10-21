@@ -26,7 +26,7 @@ class DashboardView extends GetView<DashboardController> {
       IconButton(
         tooltip: 'settings'.tr,
         onPressed: () => Get.find<WorkspaceController>().openSettings(context),
-        icon: const AppIcon(AppIcons.sliders),
+        icon: const AppIcon(AppIcons.settings),
       ),
     ],
     child: LayoutBuilder(
@@ -61,7 +61,9 @@ class DashboardView extends GetView<DashboardController> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(child: StatusCard(controller: controller)),
+                    Expanded(
+                      child: StatusCard(controller: controller, compact: false),
+                    ),
                     const SizedBox(width: 16),
                     Expanded(child: speeds()),
                   ],
@@ -69,7 +71,7 @@ class DashboardView extends GetView<DashboardController> {
               )
             : Column(
                 children: [
-                  StatusCard(controller: controller),
+                  StatusCard(controller: controller, compact: true),
                   const SizedBox(height: 16),
                   speeds(),
                 ],
@@ -125,93 +127,306 @@ class DashboardView extends GetView<DashboardController> {
   );
 
   Widget _mode(BuildContext context, bool wide) {
-    final mode = Obx(
-      () => Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: [
-          for (final entry in {
-            'rule': AppIcons.rules,
-            'global': AppIcons.globe,
-            'direct': AppIcons.navigation,
-          }.entries)
-            ChoiceChip(
-              avatar: AppIcon(entry.value, size: 16),
-              label: Text(entry.key.tr),
-              selected: controller.settings.fields['mode'] == entry.key,
-              onSelected: (_) =>
-                  _run(context, () => controller.core.setMode(entry.key)),
-            ),
-        ],
-      ),
-    );
+    final modes = <String, (IconData, String)>{
+      'rule': (AppIcons.rules, 'ruleModeHint'),
+      'global': (AppIcons.globe, 'globalModeHint'),
+      'direct': (AppIcons.navigation, 'directModeHint'),
+    };
     return AppCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          if (wide)
+      padding: const EdgeInsets.all(16),
+      child: Obx(() {
+        final colors = Theme.of(context).colorScheme;
+        final current = modes.containsKey(controller.settings.fields['mode'])
+            ? controller.settings.fields['mode'] as String
+            : 'rule';
+        final options = [
+          for (final entry in modes.entries)
+            _modeOption(
+              context,
+              mode: entry.key,
+              icon: entry.value.$1,
+              hint: entry.value.$2,
+              selected: current == entry.key,
+            ),
+        ];
+        final operations = [
+          _settingTile(
+            context,
+            key: 'systemProxy',
+            icon: AppIcons.globe,
+            subtitle: 'systemProxyHint',
+          ),
+          _settingTile(
+            context,
+            key: 'tunEnabled',
+            icon: AppIcons.shield,
+            title: 'tun',
+            subtitle: 'tunHint',
+          ),
+          _settingTile(
+            context,
+            key: 'allowLan',
+            icon: AppIcons.network,
+            subtitle: 'allowLanHint',
+          ),
+        ];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Row(
               children: [
-                Text(
-                  'outboundMode'.tr,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const Spacer(),
-                mode,
-              ],
-            )
-          else
-            mode,
-          const SizedBox(height: 8),
-          Obx(
-            () => Row(
-              children: [
+                AppIcon(AppIcons.route, size: 19, color: colors.primary),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: _switch(context, 'systemProxy', AppIcons.globe),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _switch(
-                    context,
-                    'tunEnabled',
-                    AppIcons.shield,
-                    title: 'tun',
+                  child: Text(
+                    'outboundMode'.tr,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
+                AppPill(label: current.tr, color: colors.primary),
               ],
             ),
+            const SizedBox(height: 14),
+            if (wide)
+              Row(
+                children: [
+                  for (var i = 0; i < options.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 10),
+                    Expanded(child: options[i]),
+                  ],
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < options.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    options[i],
+                  ],
+                ],
+              ),
+            const SizedBox(height: 12),
+            DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.surfaceContainerLow,
+                shape: AppShapes.control,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                child: Row(
+                  children: [
+                    AppIcon(
+                      AppIcons.info,
+                      size: 16,
+                      color: colors.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        (modes[current]?.$2 ?? 'ruleModeHint').tr,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Divider(color: colors.outlineVariant, height: 1),
+            const SizedBox(height: 12),
+            if (wide)
+              Row(
+                children: [
+                  for (var i = 0; i < operations.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 10),
+                    Expanded(child: operations[i]),
+                  ],
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < operations.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    operations[i],
+                  ],
+                ],
+              ),
+            const SizedBox(height: 10),
+            _portSummary(context),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _modeOption(
+    BuildContext context, {
+    required String mode,
+    required IconData icon,
+    required String hint,
+    required bool selected,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground = selected ? colors.primary : colors.onSurface;
+    return Material(
+      color: selected ? colors.primaryContainer : colors.surfaceContainerLow,
+      shape: AppShapes.control.copyWith(
+        side: BorderSide(
+          color: selected ? colors.primary : colors.outlineVariant,
+          width: selected ? 1 : .5,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: selected
+            ? null
+            : () => _run(context, () => controller.core.setMode(mode)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              AppIcon(icon, size: 20, color: foreground),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      mode.tr,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hint.tr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 6),
+                AppIcon(AppIcons.check, size: 18, color: colors.primary),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _switch(
-    BuildContext context,
-    String key,
-    IconData icon, {
+  Widget _settingTile(
+    BuildContext context, {
+    required String key,
+    required IconData icon,
+    required String subtitle,
     String? title,
-  }) => Row(
-    children: [
-      AppIcon(
-        icon,
-        size: 18,
-        color: Theme.of(context).colorScheme.onSurfaceVariant,
-      ),
-      const SizedBox(width: 7),
-      Expanded(
-        child: Text(
-          (title ?? key).tr,
-          style: Theme.of(context).textTheme.bodySmall,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final enabled = controller.settings.fields[key] == true;
+    final foreground = enabled ? colors.primary : colors.onSurfaceVariant;
+    return Material(
+      color: enabled ? colors.primaryContainer : colors.surfaceContainerLow,
+      shape: AppShapes.control.copyWith(
+        side: BorderSide(
+          color: enabled
+              ? colors.primary.withValues(alpha: .5)
+              : colors.outlineVariant,
+          width: .5,
         ),
       ),
-      AppSwitch(
-        value: controller.settings.fields[key] == true,
-        onChanged: (value) =>
-            _run(context, () => controller.changeSetting(key, value)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () =>
+            _run(context, () => controller.changeSetting(key, !enabled)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(11, 8, 5, 8),
+          child: Row(
+            children: [
+              AppIcon(icon, size: 19, color: foreground),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (title ?? key).tr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: enabled ? colors.onSurface : null,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle.tr,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              ),
+              AppSwitch(
+                value: enabled,
+                semanticLabel: (title ?? key).tr,
+                onChanged: (value) =>
+                    _run(context, () => controller.changeSetting(key, value)),
+              ),
+            ],
+          ),
+        ),
       ),
-    ],
-  );
+    );
+  }
+
+  Widget _portSummary(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final port = controller.settings.fields['mixedPort'];
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: colors.surfaceContainerLow,
+        shape: AppShapes.control,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        child: Row(
+          children: [
+            AppIcon(AppIcons.router, size: 18, color: colors.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'mixedPort'.tr,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            Flexible(
+              child: Text(
+                '127.0.0.1:$port',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _profile(BuildContext context) => AppCard(
     child: Obx(() {

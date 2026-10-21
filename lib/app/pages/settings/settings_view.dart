@@ -232,7 +232,6 @@ class _SettingsViewState extends State<SettingsView> {
         ]),
         _input(context, 'testUrl'),
         _input(context, 'testTimeout', number: true),
-        _switch(context, 'autoStart'),
         if (!Platform.isAndroid) _switch(context, 'launchAtLogin'),
         if (!Platform.isAndroid) _switch(context, 'minimizeToTray'),
       ],

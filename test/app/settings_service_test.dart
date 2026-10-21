@@ -36,6 +36,12 @@ class _Preferences implements SharedPreferences {
 }
 
 void main() {
+  test('connections default to automatic startup', () async {
+    final settings = SettingsService(memoryOnly: true);
+    await settings.initialize();
+    expect(settings.fields['autoStart'], true);
+  });
+
   test('a pending restore wins over an older remote script refresh', () async {
     final preferences = _Preferences();
     final settings = SettingsService(preferences: preferences);

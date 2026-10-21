@@ -1,11 +1,12 @@
 """Generate dclash's monochrome geometric cat mark.
 
 The artwork is deliberately drawn with Pillow instead of an image generator so
-that every platform receives the same deterministic, two-colour mark. The
-macOS asset catalog gets separate aqua and darkAqua variants; Flutter and the
-other desktop targets use the light variant as their default icon.
+that every platform receives the same deterministic, two-colour mark. macOS
+gets separate light and dark Dock variants plus an ICNS fallback; Flutter and
+the other desktop targets use the light variant as their default icon.
 """
 
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -69,6 +70,57 @@ def _icon(
     return image
 
 
+def _dock_icon(
+    background: tuple[int, int, int, int],
+    foreground: tuple[int, int, int, int],
+) -> Image.Image:
+    """Create a Dock tile with transparent corners.
+
+    macOS applies its own compositing to a catalog app icon. Keeping the
+    corners transparent and drawing the rounded tile ourselves prevents the
+    system from inserting a grey backing behind the monochrome mark.
+    """
+    image = Image.new("RGBA", (SIZE, SIZE), transparent)
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(
+        (0, 0, SIZE - 1, SIZE - 1),
+        radius=232,
+        fill=background,
+    )
+    _segments(draw, foreground)
+    return image
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
+
+def _write_icns(path: Path, image: Image.Image) -> None:
+    """Write a PNG-backed ICNS fallback for launchers and the Dock."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for kind, size in (
+        ("icp4", 16),
+        ("icp5", 32),
+        ("icp6", 64),
+        ("ic07", 128),
+        ("ic08", 256),
+        ("ic09", 512),
+        ("ic10", 1024),
+        ("ic11", 32),
+        ("ic12", 64),
+        ("ic13", 256),
+        ("ic14", 512),
+    ):
+        payload = _png_bytes(image.resize((size, size), Image.Resampling.LANCZOS))
+        header = kind.encode("ascii") + (8 + len(payload)).to_bytes(4, "big")
+        entries.append(header + payload)
+    body = b"".join(entries)
+    path.write_bytes(b"icns" + (8 + len(body)).to_bytes(4, "big") + body)
+
+
 def _write_scaled(image: Image.Image, path: Path, sizes: tuple[int, ...]) -> None:
     for size in sizes:
         image.resize((size, size), Image.Resampling.LANCZOS).save(
@@ -96,38 +148,51 @@ logo_dark = _icon(transparent, white)
 logo_light.save(brand / "app_logo.png")
 logo_dark.save(brand / "app_logo_dark.png")
 
-# Xcode's Dock icon uses the same opaque brand backgrounds as the Flutter,
-# Android and Windows marks. This prevents macOS from compositing a grey,
-# translucent tile behind the transparent artwork.
+# Xcode's app icon catalog remains available for other tools, but macOS uses
+# the explicit ICNS fallback below. Newer macOS versions can recompose a
+# catalog AppIcon and add a grey backing around a square PNG.
 app_icon_set = ROOT / "macos/Runner/Assets.xcassets/AppIcon.appiconset"
 app_icon_set.mkdir(parents=True, exist_ok=True)
 for old in app_icon_set.glob("app_icon_*.png"):
     old.unlink()
-light_dock = light
-dark_dock = dark
+light_dock = _dock_icon(white, black)
+dark_dock = _dock_icon(black, white)
 _write_scaled(
-    light_dock,
+    light,
     app_icon_set / "app_icon_aqua.png",
     (16, 32, 64, 128, 256, 512, 1024),
 )
 
 # Named image sets are used by the native macOS delegate to change the Dock
-# image immediately when the effective system appearance changes.
-for name, image, filename in (
-    ("DclashLogoAqua.imageset", light_dock, "dclash_logo_aqua.png"),
-    ("DclashLogoDarkAqua.imageset", dark_dock, "dclash_logo_darkAqua.png"),
+# image immediately when the effective system appearance changes. Include
+# both 1x and 2x representations so AppKit never scales a 1024px 1x image.
+for name, image in (
+    ("DclashDockIconLight.imageset", light_dock),
+    ("DclashDockIconDark.imageset", dark_dock),
 ):
     image_set = ROOT / "macos/Runner/Assets.xcassets" / name
     image_set.mkdir(parents=True, exist_ok=True)
-    image.save(image_set / filename)
+    for old in image_set.glob("icon_*.png"):
+        old.unlink()
+    image.resize((512, 512), Image.Resampling.LANCZOS).save(
+        image_set / "icon_512.png"
+    )
+    image.resize((1024, 1024), Image.Resampling.LANCZOS).save(
+        image_set / "icon_1024.png"
+    )
     (image_set / "Contents.json").write_text(
         "{\n"
         '  "images" : [\n'
-        f'    {{ "filename" : "{filename}", "idiom" : "universal", "scale" : "1x" }}\n'
+        f'    {{ "filename" : "icon_512.png", "idiom" : "mac", "scale" : "1x" }},\n'
+        f'    {{ "filename" : "icon_1024.png", "idiom" : "mac", "scale" : "2x" }}\n'
         "  ],\n"
         '  "info" : { "author" : "xcode", "version" : 1 }\n'
         "}\n"
     )
+
+# Disable Xcode's AppIcon catalog as the bundle icon source and use a standard
+# ICNS file instead. This avoids macOS 27's automatic grey backing layer.
+_write_icns(ROOT / "macos/Runner/Resources/Dclash.icns", dark_dock)
 
 # Windows executable icon defaults to the light, high-contrast mark.
 light.save(
