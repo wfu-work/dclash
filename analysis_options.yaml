@@ -1,0 +1,10 @@
+include: package:flutter_lints/flutter.yaml
+analyzer:
+  exclude:
+    - plugins/**
+    - core/**
+    - build/**
+linter:
+  rules:
+    prefer_single_quotes: true
+    unawaited_futures: true

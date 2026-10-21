@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="LaunchTheme" parent="@style/NormalTheme">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="s">@color/cloudrift_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="s">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/NormalTheme</item>
+    </style>
+</resources>

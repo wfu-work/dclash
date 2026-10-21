@@ -1,0 +1,62 @@
+name: dclash_flutter
+description: 云渡 Cloudrift — a GetX proxy client based on FlClash and mihomo.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ^3.12.0
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  get: ^4.7.3
+  dio: ^5.9.1
+  path: ^1.9.1
+  path_drawing: ^1.0.1
+  path_provider: ^2.1.5
+  shared_preferences: ^2.5.3
+  file_picker: ^10.3.10
+  yaml: ^3.1.3
+  crypto: ^3.0.7
+  archive: ^4.0.7
+  flutter_secure_storage: ^10.2.0
+  url_launcher: ^6.3.2
+  package_info_plus: ^9.0.0
+  connectivity_plus: ^7.0.0
+  app_links: ^7.0.0
+  dynamic_color: ^1.8.1
+  ffi: ^2.1.4
+  window:
+    path: plugins/window
+  proxy:
+    path: plugins/proxy
+  tray:
+    path: plugins/tray
+  wifi_ssid:
+    path: plugins/wifi_ssid
+  rust_api:
+    path: plugins/rust_api
+  setup:
+    path: plugins/setup
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+hooks:
+  user_defines:
+    setup:
+      build_assets: true
+    rust_api:
+      build_assets: true
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/data/
+    - assets/brand/
+    - third_party/FlClash-LICENSE
+    - third_party/lucide-icons-LICENSE.txt
+    - assets/fonts/OFL.txt
+  fonts:
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf

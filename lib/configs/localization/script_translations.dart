@@ -1,0 +1,91 @@
+abstract final class ScriptTranslations {
+  static const en = <String, String>{
+    'scriptLibrary': 'Shared scripts',
+    'scriptLibraryHelp':
+        'Enabled scripts run in library order by default. Each profile can choose a smaller set before its own override script.',
+    'scriptSelectionTitle': 'Shared scripts for this profile',
+    'scriptSelectionFollow': 'Follow enabled scripts from the library',
+    'scriptSelectionFollowHelp':
+        'Newly enabled scripts are included automatically. Turn this off to choose a fixed set.',
+    'scriptSelectionEmpty': 'No scripts are available in the library.',
+    'scriptSelectionMissing':
+        'This profile references a script that is no longer in the library.',
+    'scriptDisabled': 'Disabled in the library',
+    'scriptAdd': 'Add script',
+    'scriptCreate': 'New local script',
+    'scriptImport': 'Import HTTPS script',
+    'scriptEdit': 'Edit script',
+    'scriptName': 'Script name',
+    'scriptNameRequired': 'Enter a script name.',
+    'scriptUrl': 'HTTPS script URL',
+    'scriptInvalidUrl': 'Use an HTTPS URL without credentials.',
+    'scriptContentRequired': 'Enter a main(config) script.',
+    'scriptTooLarge': 'Scripts must be at most 1 MiB.',
+    'scriptEnabled': 'Enable script',
+    'scriptEnableConfirm':
+        'Enable “@name” for every profile? It will run when configurations are built, including a reload of the active service.',
+    'scriptEditHelp':
+        'Define main(config) and return the configuration. New or changed code stays disabled until you enable it.',
+    'scriptRemoteEditHelp':
+        'Remote content is read-only. Refresh it from the library. Changed code stays disabled until you enable it.',
+    'scriptImportHelp':
+        'Download a main(config) script over HTTPS. It stays disabled so you can review it before enabling it.',
+    'scriptEmpty': 'Create your shared script library',
+    'scriptEmptyHelp':
+        'Reuse local or remote configuration scripts across all profiles.',
+    'scriptLocal': 'Local script',
+    'scriptMoveUp': 'Run earlier',
+    'scriptMoveDown': 'Run later',
+    'scriptRefresh': 'Refresh remote script',
+    'scriptRefreshed': 'Script refreshed. Changed code stays disabled.',
+    'scriptDelete': 'Delete script',
+    'scriptDeleteConfirm': 'Delete “@name” from the shared library?',
+    'scriptInvalidData': 'The script library could not be read',
+    'scriptInvalidDataHelp':
+        'The stored data has been kept. Copy it before resetting the library, or restore a compatible backup.',
+    'scriptCopyRaw': 'Copy stored data',
+    'scriptReset': 'Reset library',
+    'scriptResetConfirm':
+        'Remove the stored script library and start empty? Copy the data first if you want to keep it.',
+  };
+
+  static const zh = <String, String>{
+    'scriptLibrary': '共享脚本',
+    'scriptLibraryHelp': '默认按脚本库顺序将已启用脚本应用到所有配置。每个配置也可以单独选择脚本，再执行配置专属脚本。',
+    'scriptSelectionTitle': '此配置使用的共享脚本',
+    'scriptSelectionFollow': '跟随脚本库中的已启用脚本',
+    'scriptSelectionFollowHelp': '新启用的脚本会自动加入。关闭后可固定选择一组脚本。',
+    'scriptSelectionEmpty': '脚本库中还没有可用脚本。',
+    'scriptSelectionMissing': '此配置引用的脚本已不在脚本库中。',
+    'scriptDisabled': '脚本库中已停用',
+    'scriptAdd': '添加脚本',
+    'scriptCreate': '新建本地脚本',
+    'scriptImport': '导入 HTTPS 脚本',
+    'scriptEdit': '编辑脚本',
+    'scriptName': '脚本名称',
+    'scriptNameRequired': '请输入脚本名称。',
+    'scriptUrl': 'HTTPS 脚本链接',
+    'scriptInvalidUrl': '请使用不含账号密码的 HTTPS 链接。',
+    'scriptContentRequired': '请输入 main(config) 脚本。',
+    'scriptTooLarge': '脚本大小不能超过 1 MiB。',
+    'scriptEnabled': '启用脚本',
+    'scriptEnableConfirm': '为所有配置启用「@name」？构建配置时会执行脚本，当前运行的服务也会重新加载。',
+    'scriptEditHelp': '定义 main(config) 并返回配置。新建或修改的代码默认停用，请检查后启用。',
+    'scriptRemoteEditHelp': '远程内容只读，可返回脚本库手动刷新。代码变化后会停用，请检查后启用。',
+    'scriptImportHelp': '通过 HTTPS 下载 main(config) 脚本。导入后默认停用，请检查后启用。',
+    'scriptEmpty': '建立你的共享脚本库',
+    'scriptEmptyHelp': '在所有配置中复用本地或远程配置脚本。',
+    'scriptLocal': '本地脚本',
+    'scriptMoveUp': '提前执行',
+    'scriptMoveDown': '延后执行',
+    'scriptRefresh': '刷新远程脚本',
+    'scriptRefreshed': '脚本已刷新，变化的代码将保持停用。',
+    'scriptDelete': '删除脚本',
+    'scriptDeleteConfirm': '从共享脚本库中删除「@name」？',
+    'scriptInvalidData': '无法读取共享脚本库',
+    'scriptInvalidDataHelp': '原始数据已保留。可先复制数据再重置脚本库，或恢复兼容的备份。',
+    'scriptCopyRaw': '复制原始数据',
+    'scriptReset': '重置脚本库',
+    'scriptResetConfirm': '删除已保存的脚本库并从空库开始？如需保留，请先复制原始数据。',
+  };
+}
