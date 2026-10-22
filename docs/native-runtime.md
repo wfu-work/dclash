@@ -66,8 +66,18 @@ The final macOS build exercised this repair and passed the full signature
 check. To perform a read-only verification of an existing artifact:
 
 ```sh
-dart tool/verify_macos_bundle.dart build/macos/Build/Products/Debug/Cloudrift.app
+dart tool/verify_macos_bundle.dart build/macos/Build/Products/Debug/dclash.app
 ```
+
+## Android release signing
+
+Release builds must use an explicit distribution keystore. Copy
+`android/key.properties.example` to `android/key.properties` and fill in the
+keystore values, or provide the equivalent `ANDROID_KEYSTORE_FILE`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`
+environment variables in CI. A release build fails when these values are
+missing; `-PallowDebugSigning=true` is available only for local, non-distributable
+debug-signing checks.
 
 ## Commands
 
@@ -153,7 +163,7 @@ separate acceptance checks on the target platforms.
 | Temporary-home sidecar smoke | Passed, including invalid configuration retention and owned-process exit. No listeners or Internet sockets were opened. |
 | Android native modules and application Kotlin/Java/resources | Passed for Android ARM64. |
 | Complete Android ARM64 debug APK | Passed after the latest application fixes. `build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk` contains only `arm64-v8a`, including Go (`libclash.so`), Rust (`librust_api.so`), Flutter and the Dart kernel. APK v2 signature verification passed. Metadata is `com.cloudrift.dclash`, label `云渡 Cloudrift`, minSdk 24, targetSdk 36. No APK was installed or run. |
-| macOS debug build with `DC_PREVIEW=true` | Passed. `build/macos/Build/Products/Debug/Cloudrift.app` contains `Contents/MacOS/DClashCore` and `rust_api.framework`; `codesign --verify --deep --strict` passed. An isolated preview UI launch was also performed, using fixtures with native mutations blocked. |
+| macOS debug build with `DC_PREVIEW=true` | Passed. `build/macos/Build/Products/Debug/dclash.app` contains `Contents/MacOS/DClashCore` and `rust_api.framework`; `codesign --verify --deep --strict` passed. An isolated preview UI launch was also performed, using fixtures with native mutations blocked. |
 
 The final complete Android build log is
 `build/verification/android-arm64-debug-apk-final.log` (the first native build

@@ -53,8 +53,9 @@ abstract final class AppInitializer {
         preview: preview,
         beforeExit: () async {
           profiles?.onClose();
-          if (temporaryDirectory != null && await temporaryDirectory.exists()) {
-            await temporaryDirectory.delete(recursive: true);
+          final directory = temporaryDirectory;
+          if (directory != null && await directory.exists()) {
+            await directory.delete(recursive: true);
           }
         },
       );

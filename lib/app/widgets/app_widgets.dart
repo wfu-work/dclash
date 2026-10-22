@@ -12,3 +12,4 @@ export 'app_page.dart';
 export 'app_search_field.dart';
 export 'app_settings_row.dart';
 export 'app_switch.dart';
+export 'connect_button.dart';

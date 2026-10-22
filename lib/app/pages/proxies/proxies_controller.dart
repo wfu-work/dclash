@@ -11,9 +11,12 @@ class ProxiesController extends GetxController {
   final CoreService core;
   final SettingsService settings;
   final query = ''.obs;
+  final searchOpen = false.obs;
   final selectedGroup = ''.obs;
   final grid = true.obs;
   final testing = <String>{}.obs;
+  final testingGroups = <String>{}.obs;
+  final expandedGroups = <String, bool>{}.obs;
   final testingAll = false.obs;
   final previewGroups = <ProxyGroup>[].obs;
   final previewLoading = false.obs;
@@ -124,10 +127,21 @@ class ProxiesController extends GetxController {
   Future<void> setSort(String value) => settings.set('proxySort', value);
   Future<void> setHideUnavailable(bool value) =>
       settings.set('hideUnavailable', value);
+  void toggleSearch() {
+    searchOpen.toggle();
+    if (!searchOpen.value) query.value = '';
+  }
+
   Future<void> toggleLayout() async {
     final next = !grid.value;
     await settings.set('proxyLayout', next ? 'grid' : 'list');
     grid.value = next;
+  }
+
+  bool isExpanded(ProxyGroup value) => expandedGroups[value.name] ?? true;
+
+  void toggleGroup(ProxyGroup value) {
+    expandedGroups[value.name] = !isExpanded(value);
   }
 
   Future<void> select(ProxyNode node) async {
@@ -143,6 +157,19 @@ class ProxiesController extends GetxController {
       await core.testDelay(node.name);
     } finally {
       testing.remove(node.name);
+    }
+  }
+
+  Future<void> testGroup(ProxyGroup value) async {
+    if (!testingGroups.add(value.name)) return;
+    try {
+      final nodes = value.nodes;
+      for (var offset = 0; offset < nodes.length; offset += 8) {
+        await Future.wait(nodes.skip(offset).take(8).map(test));
+      }
+      await core.refreshRuntime();
+    } finally {
+      testingGroups.remove(value.name);
     }
   }
 

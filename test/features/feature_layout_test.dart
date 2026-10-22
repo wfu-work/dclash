@@ -108,4 +108,52 @@ void main() {
     expect(find.text('88 ms'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('proxy group toolbar fits on a small screen', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = Get.find<ProxiesController>();
+    controller.core.status.value = CoreStatus.running;
+    controller.core.groups.add(
+      const ProxyGroup(
+        name: 'Proxy',
+        type: 'Selector',
+        selected: 'Tokyo',
+        nodes: [ProxyNode(name: 'Tokyo', type: 'VLESS')],
+      ),
+    );
+    await tester.pumpWidget(app(const ProxiesView()));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SegmentedButton<String>), findsOneWidget);
+    expect(find.byType(ProxyNodeTile), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('latency testing explains that the core must be connected', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1100, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = Get.find<ProxiesController>();
+    controller.previewGroups.add(
+      const ProxyGroup(
+        name: 'Proxy',
+        type: 'Selector',
+        selected: 'Tokyo',
+        nodes: [ProxyNode(name: 'Tokyo', type: 'VLESS')],
+      ),
+    );
+    await tester.pumpWidget(app(const ProxiesView()));
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(FilledButton, 'Test latency');
+    expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+    await tester.tap(button);
+    await tester.pump();
+    expect(
+      find.text('Start the service from Overview to see live activity.'),
+      findsOneWidget,
+    );
+  });
 }

@@ -54,6 +54,6 @@ dart tool/build.dart apk --isolated-cargo-home=.dart_tool/cargo-home --debug --n
 - 普通 Android APK：`build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk`，包名 `com.cloudrift.dclash`。
 - 普通 APK SHA-256：`2ac0df10b6184f59b43c3c2958de24584bccc78a4e08b7f60e989243379c91a9`。
 - Android 预览 APK：`build/verification/cloudrift-ui-preview-arm64.apk`。
-- macOS 预览：`build/macos/Build/Products/Debug/Cloudrift.app`。
+- macOS 预览：`build/macos/Build/Products/Debug/dclash.app`。
 
 本轮验收覆盖界面与构建；真实 VPN 流量、授权流程及其他平台验收沿用 [既有验证记录](verification.md) 中的待办，不作为本轮通过项。

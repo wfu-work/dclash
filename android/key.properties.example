@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties and replace every value.
+# The file is ignored by Git. Environment variables with the equivalent
+# ANDROID_* names can be used in CI instead.
+storeFile=../release-key.jks
+storePassword=replace-me
+keyAlias=replace-me
+keyPassword=replace-me

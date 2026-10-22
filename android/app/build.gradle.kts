@@ -1,8 +1,35 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val signingProperties = Properties()
+val signingPropertiesFile = rootProject.file("key.properties")
+if (signingPropertiesFile.isFile) {
+    signingPropertiesFile.inputStream().use(signingProperties::load)
+}
+
+fun signingValue(key: String, environment: String): String? =
+    signingProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
+        ?: providers.environmentVariable(environment).orNull?.trim()?.takeIf { it.isNotEmpty() }
+
+val releaseStoreFile = signingValue("storeFile", "ANDROID_KEYSTORE_FILE")
+val releaseStorePassword = signingValue("storePassword", "ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "ANDROID_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "ANDROID_KEY_PASSWORD")
+val releaseSigningConfigured = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it != null }
+val allowDebugReleaseSigning = providers.gradleProperty("allowDebugSigning")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
 
 android {
     namespace = "com.cloudrift.dclash"
@@ -25,11 +52,40 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = rootProject.file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            when {
+                releaseSigningConfigured -> signingConfig = signingConfigs.getByName("release")
+                allowDebugReleaseSigning -> signingConfig = signingConfigs.getByName("debug")
+            }
+        }
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleRelease" || name == "bundleRelease") {
+        doFirst {
+            if (!releaseSigningConfigured && !allowDebugReleaseSigning) {
+                throw GradleException(
+                    "Release signing is not configured. Provide key.properties or " +
+                        "ANDROID_KEYSTORE_FILE/ANDROID_KEYSTORE_PASSWORD/ANDROID_KEY_ALIAS/ANDROID_KEY_PASSWORD. " +
+                        "Use -PallowDebugSigning=true only for local non-distributable builds.",
+                )
+            }
+            if (releaseSigningConfigured && !rootProject.file(requireNotNull(releaseStoreFile)).isFile) {
+                throw GradleException("Android keystore does not exist: $releaseStoreFile")
+            }
         }
     }
 }

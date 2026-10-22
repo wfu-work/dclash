@@ -11,23 +11,33 @@ class ConnectButton extends StatelessWidget {
     required this.onPressed,
   });
   final CoreStatus status;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final busy = status == CoreStatus.starting || status == CoreStatus.stopping;
     final running = status == CoreStatus.running;
-    final foreground = running ? colors.onPrimary : colors.primary;
+    final enabled = onPressed != null && !busy;
+    final foreground = !enabled
+        ? colors.onSurfaceVariant
+        : running
+        ? colors.onPrimary
+        : colors.primary;
     return Semantics(
       button: true,
+      enabled: enabled,
       label: (running ? 'stop' : 'start').tr,
       child: Tooltip(
         message: (running ? 'stop' : 'start').tr,
         child: SizedBox.square(
           dimension: 80,
           child: Material(
-            color: running ? colors.primary : colors.primaryContainer,
+            color: !enabled
+                ? colors.surfaceContainerHighest
+                : running
+                ? colors.primary
+                : colors.primaryContainer,
             shape: CircleBorder(
               side: BorderSide(
                 color: colors.primary.withValues(alpha: .16),

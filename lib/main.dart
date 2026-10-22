@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import 'app/cloudrift_app.dart';
 import 'app/widgets/app_icon.dart';
+import 'app/widgets/app_message.dart';
 import 'app/widgets/app_system_ui.dart';
 import 'configs/app_initializer.dart';
 import 'configs/theme/app_theme.dart';
@@ -22,7 +23,14 @@ Future<void> main() async {
     if (!const bool.fromEnvironment('DC_PREVIEW') &&
         core.profiles.active != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(core.start().catchError((Object _) {}));
+        unawaited(
+          core.start().catchError((Object error) {
+            final context = Get.context;
+            if (context != null && context.mounted) {
+              AppMessage.error(context, error);
+            }
+          }),
+        );
       });
     }
   } on Object catch (error) {

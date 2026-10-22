@@ -43,7 +43,7 @@ dart tool/build_macos.dart --isolated-cargo-home=.dart_tool/cargo-home --debug -
 dart tool/build.dart apk --isolated-cargo-home=.dart_tool/cargo-home --debug --no-pub --target-platform=android-arm64 --split-per-abi
 ```
 
-- macOS 产物：`build/macos/Build/Products/Debug/Cloudrift.app`；构建日志：`build/verification/macos-preview-final.log`。
+- macOS 产物：`build/macos/Build/Products/Debug/dclash.app`；构建日志：`build/verification/macos-preview-final.log`。
 - Android 最终分包：`build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk`；最终日志：`build/verification/android-arm64-debug-apk-final.log`。
 - Android SHA-256：`065313846a2e06b316909d2945138a3f8d1b51d8240fc5a63a517bc6cc45cca9`；包名 `com.cloudrift.dclash`，名称 `云渡 Cloudrift`。
 

@@ -37,7 +37,7 @@ class StatusCard extends StatelessWidget {
             icon: const AppIcon(AppIcons.addLink, size: 18),
             label: Text('browseProfiles'.tr),
           )
-        : _autoConnectBadge(context, active: active, status: status);
+        : _connectionControls(context, active: active, status: status);
     if (compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -89,18 +89,15 @@ class StatusCard extends StatelessWidget {
       ),
       const SizedBox(height: 6),
       Text(
-        core.error.value ??
-            (active
-                ? controller.profiles.active?.name ?? 'dclash'
-                : 'localMode'.tr),
+        active ? controller.profiles.active?.name ?? 'dclash' : 'localMode'.tr,
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: status == CoreStatus.failed
-              ? Theme.of(context).colorScheme.error
-              : null,
-        ),
+        style: Theme.of(context).textTheme.bodySmall,
       ),
+      if (core.error.value case final message?) ...[
+        const SizedBox(height: 12),
+        _errorPanel(context, message),
+      ],
       const SizedBox(height: 22),
       Text('uptime'.tr, style: Theme.of(context).textTheme.labelSmall),
       const SizedBox(height: 3),
@@ -115,25 +112,83 @@ class StatusCard extends StatelessWidget {
     ],
   );
 
-  Widget _autoConnectBadge(
+  Widget _connectionControls(
     BuildContext context, {
     required bool active,
     required CoreStatus status,
   }) {
     final colors = Theme.of(context).colorScheme;
-    final color = status == CoreStatus.failed
-        ? colors.error
-        : active
-        ? colors.primary
-        : colors.onSurfaceVariant;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        AppIcon(AppIcons.cloudSync, size: 32, color: color),
+        ConnectButton(
+          status: status,
+          onPressed:
+              status == CoreStatus.starting || status == CoreStatus.stopping
+              ? null
+              : () => _toggle(context),
+        ),
         const SizedBox(height: 10),
-        AppPill(label: 'autoConnect'.tr, color: color),
+        AppPill(
+          label: active ? 'stop'.tr : 'start'.tr,
+          color: status == CoreStatus.failed
+              ? colors.error
+              : active
+              ? colors.primary
+              : colors.onSurfaceVariant,
+        ),
       ],
     );
+  }
+
+  Widget _errorPanel(BuildContext context, String message) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.error.withValues(alpha: .3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppIcon(AppIcons.error, size: 18, color: colors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'connectionError'.tr,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.onErrorContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                SelectableText(
+                  message,
+                  maxLines: 5,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onErrorContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggle(BuildContext context) async {
+    try {
+      await controller.toggle();
+    } on Object catch (error) {
+      if (context.mounted) showAppError(context, error);
+    }
   }
 }

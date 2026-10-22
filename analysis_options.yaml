@@ -4,6 +4,10 @@ analyzer:
     - plugins/**
     - core/**
     - build/**
+    - android/**
+    - windows/**
+    - macos/**
+    - linux/**
 linter:
   rules:
     prefer_single_quotes: true

@@ -226,7 +226,14 @@ void main() {
     );
     await tester.pumpWidget(const CloudriftApp());
     await tester.pumpAndSettle();
-    expect(find.byType(ConnectButton), findsNothing);
+    expect(find.byType(ConnectButton), findsOneWidget);
+    final core = Get.find<CoreService>();
+    core.error.value = 'DClashCore is missing';
+    await tester.pump();
+    expect(find.text('Why the connection failed'), findsOneWidget);
+    expect(find.text('DClashCore is missing'), findsOneWidget);
+    core.error.value = null;
+    await tester.pump();
     expect(find.text('Outbound mode'), findsOneWidget);
     expect(find.text('Allow LAN'), findsOneWidget);
     expect(find.text('Mixed proxy port'), findsOneWidget);

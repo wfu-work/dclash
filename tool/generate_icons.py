@@ -29,7 +29,9 @@ def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> No
     def line(points: list[tuple[int, int]], width: int = STROKE) -> None:
         draw.line(points, fill=color, width=width, joint="curve")
 
-    # Angular head, ears and jaw.
+    # Rounded head, ears and jaw. The lower contour uses several points so
+    # the mark keeps a soft, centered base at small sizes instead of ending
+    # in a visually heavy point.
     line(
         [
             (240, 420),
@@ -40,9 +42,17 @@ def _segments(draw: ImageDraw.ImageDraw, color: tuple[int, int, int, int]) -> No
             (774, 210),
             (784, 420),
             (756, 574),
-            (684, 692),
-            (512, 790),
-            (340, 692),
+            (730, 622),
+            (694, 674),
+            (642, 716),
+            (584, 752),
+            (540, 776),
+            (512, 784),
+            (484, 776),
+            (440, 752),
+            (382, 716),
+            (330, 674),
+            (294, 622),
             (268, 574),
             (240, 420),
         ]

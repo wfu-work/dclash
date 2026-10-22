@@ -104,6 +104,33 @@ void main() {
   );
 
   test(
+    'proxy group tools test one group and remember its collapsed state',
+    () async {
+      core.status.value = CoreStatus.running;
+      const group = ProxyGroup(
+        name: 'Proxy',
+        type: 'Selector',
+        selected: 'Tokyo',
+        nodes: [
+          ProxyNode(name: 'Tokyo', type: 'VLESS'),
+          ProxyNode(name: 'Seoul', type: 'SS'),
+        ],
+      );
+      core.groups.add(group);
+      final controller = ProxiesController(core, settings);
+
+      expect(controller.isExpanded(group), isTrue);
+      controller.toggleGroup(group);
+      expect(controller.isExpanded(group), isFalse);
+      controller.toggleGroup(group);
+      await controller.testGroup(group);
+
+      expect(core.calls, containsAll(['test:Tokyo', 'test:Seoul']));
+      expect(controller.testingGroups, isEmpty);
+    },
+  );
+
+  test(
     'active profile edits reload and removing it stops the service',
     () async {
       const profile = ClashProfile(
