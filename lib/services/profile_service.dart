@@ -27,6 +27,7 @@ class ProfileService extends GetxService {
       profiles.firstWhereOrNull((profile) => profile.id == activeId.value);
   Future<void> _pending = Future.value();
   Timer? _refreshTimer;
+  final updateFailure = Rxn<ProfileUpdateFailure>();
 
   Future<void> initialize() async {
     _directory ??= await getApplicationSupportDirectory();
@@ -199,6 +200,11 @@ class ProfileService extends GetxService {
         url: uri.toString(),
         headers: response.headers,
       );
+    } on Object {
+      if (existing != null) {
+        updateFailure.value = ProfileUpdateFailure(existing.id, existing.name);
+      }
+      rethrow;
     } finally {
       updating.remove(key);
     }
@@ -428,4 +434,10 @@ class ProfileService extends GetxService {
     _refreshTimer?.cancel();
     super.onClose();
   }
+}
+
+/// Deliberately excludes subscription URLs, credentials and response bodies.
+class ProfileUpdateFailure {
+  const ProfileUpdateFailure(this.id, this.name);
+  final String id, name;
 }

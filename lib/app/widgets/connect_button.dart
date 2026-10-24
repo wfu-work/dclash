@@ -9,9 +9,11 @@ class ConnectButton extends StatelessWidget {
     super.key,
     required this.status,
     required this.onPressed,
+    this.size = 80,
   });
   final CoreStatus status;
   final VoidCallback? onPressed;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +33,7 @@ class ConnectButton extends StatelessWidget {
       child: Tooltip(
         message: (running ? 'stop' : 'start').tr,
         child: SizedBox.square(
-          dimension: 80,
+          dimension: size,
           child: Material(
             color: !enabled
                 ? colors.surfaceContainerHighest
@@ -56,7 +58,11 @@ class ConnectButton extends StatelessWidget {
                           strokeWidth: 1.5,
                         ),
                       )
-                    : AppIcon(AppIcons.power, size: 32, color: foreground),
+                    : AppIcon(
+                        AppIcons.power,
+                        size: size * .4,
+                        color: foreground,
+                      ),
               ),
             ),
           ),

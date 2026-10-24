@@ -38,6 +38,15 @@ dependencies:
     path: plugins/rust_api
   setup:
     path: plugins/setup
+  local_notifier: ^0.1.6
+  hotkey_manager: ^0.2.3
+dependency_overrides:
+  hotkey_manager_macos:
+    path: plugins/hotkey_manager_macos
+  hotkey_manager_windows:
+    path: plugins/hotkey_manager_windows
+  hotkey_manager_linux:
+    path: plugins/hotkey_manager_linux
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -45,9 +54,9 @@ dev_dependencies:
 hooks:
   user_defines:
     setup:
-      build_assets: true
+      build_assets: false
     rust_api:
-      build_assets: true
+      build_assets: false
 flutter:
   uses-material-design: true
   assets:

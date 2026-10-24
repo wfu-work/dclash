@@ -1,4 +1,5 @@
 import 'package:dclash_flutter/app/pages/profiles/widgets/profile_settings_dialog.dart';
+import 'package:dclash_flutter/app/widgets/app_switch.dart';
 import 'package:dclash_flutter/configs/localization/feature_translations.dart';
 import 'package:dclash_flutter/domains/clash_profile.dart';
 import 'package:dclash_flutter/domains/script_library.dart';
@@ -63,7 +64,7 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
     expect(find.text('Shared scripts for this profile'), findsOneWidget);
-    await tester.tap(find.byType(SwitchListTile));
+    await tester.tap(find.byType(AppSwitch));
     await tester.pump();
     await tester.tap(find.byType(CheckboxListTile).first);
     await tester.tap(find.text('Save'));

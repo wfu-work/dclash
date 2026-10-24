@@ -22,12 +22,12 @@ class InstalledAppsView extends GetView<InstalledAppsController> {
             'count': '${controller.selected.length}',
           }),
           scroll: false,
+          leading: IconButton(
+            tooltip: 'back'.tr,
+            onPressed: saving ? null : () => Navigator.pop(context),
+            icon: const AppIcon(AppIcons.arrowLeft),
+          ),
           actions: [
-            IconButton(
-              tooltip: 'cancel'.tr,
-              onPressed: saving ? null : () => Navigator.pop(context),
-              icon: const AppIcon(AppIcons.close),
-            ),
             IconButton.filled(
               tooltip: 'save'.tr,
               onPressed: saving

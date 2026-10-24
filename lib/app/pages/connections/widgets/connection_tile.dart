@@ -32,7 +32,9 @@ class ConnectionTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
           child: LayoutBuilder(
             builder: (_, constraints) {
-              final wide = constraints.maxWidth > 680;
+              final wide =
+                  constraints.maxWidth >= 760 &&
+                  MediaQuery.textScalerOf(context).scale(14) <= 19;
               final identity = Row(
                 children: [
                   Container(
@@ -75,17 +77,26 @@ class ConnectionTile extends StatelessWidget {
                 ],
               );
               final traffic = Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    '↑ ${formatBytes(connection.upload)}',
-                    style: theme.textTheme.labelSmall,
+                  Expanded(
+                    child: Text(
+                      '↑ ${formatBytes(connection.upload)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.labelSmall,
+                    ),
                   ),
-                  const SizedBox(width: 14),
-                  Text(
-                    '↓ ${formatBytes(connection.download)}',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.primary,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '↓ ${formatBytes(connection.download)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colors.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -131,9 +142,16 @@ class ConnectionTile extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 20),
-                        traffic,
-                        const SizedBox(width: 10),
-                        close,
+                        SizedBox(
+                          width: 224,
+                          child: Row(
+                            children: [
+                              Expanded(child: traffic),
+                              const SizedBox(width: 8),
+                              close,
+                            ],
+                          ),
+                        ),
                       ],
                     )
                   : Column(

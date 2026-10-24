@@ -5,7 +5,9 @@ import '../../../services/settings_service.dart';
 import '../../widgets/app_widgets.dart';
 
 class DashboardLayoutView extends StatefulWidget {
-  const DashboardLayoutView({super.key});
+  const DashboardLayoutView({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<DashboardLayoutView> createState() => _DashboardLayoutViewState();
@@ -37,7 +39,13 @@ class _DashboardLayoutViewState extends State<DashboardLayoutView> {
         'dashboardCards',
         _cards.where(_visible.contains).toList(),
       );
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        if (widget.embedded) {
+          AppMessage.success(context, 'saved'.tr);
+        } else {
+          Navigator.pop(context);
+        }
+      }
     } on Object catch (error) {
       if (mounted) showAppError(context, error);
     } finally {
@@ -46,66 +54,74 @@ class _DashboardLayoutViewState extends State<DashboardLayoutView> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: AppPage(
-        title: 'dashboardLayout'.tr,
-        leading: IconButton(
-          tooltip: 'back'.tr,
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          icon: const AppIcon(AppIcons.arrowLeft),
+  Widget build(BuildContext context) {
+    final page = AppPage(
+      title: 'dashboardLayout'.tr,
+      automaticallyImplyLeading: !widget.embedded,
+      subtitle: 'dashboardLayoutHint'.tr,
+      scroll: false,
+      actions: [
+        TextButton(
+          onPressed: _saving
+              ? null
+              : () => setState(() {
+                  _cards
+                    ..clear()
+                    ..addAll(
+                      (SettingsService.defaults['dashboardCards'] as List)
+                          .cast<String>(),
+                    );
+                  _visible
+                    ..clear()
+                    ..addAll(_cards);
+                }),
+          child: Text('settingsRestoreLayout'.tr),
         ),
-        subtitle: 'dashboardLayoutHint'.tr,
-        scroll: false,
-        actions: [
-          FilledButton(
-            onPressed: _saving || _visible.isEmpty ? null : _save,
-            child: Text('save'.tr),
-          ),
-        ],
-        child: ReorderableListView.builder(
-          itemCount: _cards.length,
-          buildDefaultDragHandles: false,
-          onReorderItem: (oldIndex, newIndex) {
-            setState(() {
-              _cards.insert(newIndex, _cards.removeAt(oldIndex));
-            });
-          },
-          itemBuilder: (context, index) {
-            final key = _cards[index];
-            return Padding(
-              key: ValueKey(key),
-              padding: const EdgeInsets.only(bottom: 10),
-              child: AppCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    ReorderableDragStartListener(
-                      index: index,
-                      child: const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: AppIcon(AppIcons.drag),
-                      ),
+        FilledButton(
+          onPressed: _saving || _visible.isEmpty ? null : _save,
+          child: Text('save'.tr),
+        ),
+      ],
+      child: ReorderableListView.builder(
+        itemCount: _cards.length,
+        buildDefaultDragHandles: false,
+        onReorderItem: (oldIndex, newIndex) {
+          setState(() {
+            _cards.insert(newIndex, _cards.removeAt(oldIndex));
+          });
+        },
+        itemBuilder: (context, index) {
+          final key = _cards[index];
+          return Padding(
+            key: ValueKey(key),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: AppIcon(AppIcons.drag),
                     ),
-                    Expanded(child: Text(key.tr)),
-                    AppSwitch(
-                      value: _visible.contains(key),
-                      onChanged: _saving
-                          ? null
-                          : (value) => setState(() {
-                              value ? _visible.add(key) : _visible.remove(key);
-                            }),
-                    ),
-                  ],
-                ),
+                  ),
+                  Expanded(child: Text(key.tr)),
+                  AppSwitch(
+                    value: _visible.contains(key),
+                    onChanged: _saving
+                        ? null
+                        : (value) => setState(() {
+                            value ? _visible.add(key) : _visible.remove(key);
+                          }),
+                  ),
+                ],
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
-    ),
-  );
+    );
+    return widget.embedded ? page : Scaffold(body: SafeArea(child: page));
+  }
 }

@@ -42,13 +42,20 @@ class SettingsService extends GetxService {
     'controllerPort': 19090,
     'scripts': '',
     'resources': '',
+    // Tracks one-time dashboard layout upgrades without re-enabling cards the
+    // user has explicitly hidden.
+    'dashboardLayoutVersion': 3,
     'dashboardCards': [
       'status',
       'outboundMode',
+      'runtimeResources',
       'currentProfile',
       'currentOutbound',
+      'healthSummary',
+      'todayTraffic',
       'proxyGroups',
       'connections',
+      'recentEvents',
       'serviceStatus',
     ],
     'proxySort': 'default',
@@ -60,6 +67,26 @@ class SettingsService extends GetxService {
     'autoStart': true,
     'launchAtLogin': false,
     'minimizeToTray': true,
+    'startHidden': false,
+    'rememberWindowSize': true,
+    'windowWidth': 1240,
+    'windowHeight': 850,
+    'shortcutsEnabled': false,
+    'shortcutWindow': 'ctrl+alt+w',
+    'shortcutConnection': 'ctrl+alt+c',
+    'shortcutMode': 'ctrl+alt+m',
+    'notifyProfileFailure': true,
+    'nativeNotifications': false,
+    'historyRetentionDays': 30,
+    'recordTraffic': true,
+    'recordTimeline': true,
+    'recordNodeQuality': true,
+    'recordHealthHistory': true,
+    'pollIntervalSeconds': 1,
+    'backgroundIntervalSeconds': 5,
+    'reduceBackgroundRefresh': true,
+    'autoCheckUpdates': false,
+
     'webdavUrl': '',
     'webdavUser': '',
     'testUrl': 'https://www.gstatic.com/generate_204',
@@ -80,7 +107,59 @@ class SettingsService extends GetxService {
     final stored = _preferences?.getString('cloudrift.settings.v1');
     final values = stored == null ? <String, dynamic>{} : _decode(stored);
     values.removeWhere((key, _) => !defaults.containsKey(key));
+    _migrateDashboardLayout(values);
     fields.assignAll(_validated({...defaults, ...values}));
+  }
+
+  static void _migrateDashboardLayout(Map<String, dynamic> values) {
+    final version = values['dashboardLayoutVersion'];
+    if (version is int && version >= 3) return;
+    final layout = values['dashboardCards'];
+    if (layout is List &&
+        layout.isNotEmpty &&
+        layout.every((item) => item is String)) {
+      final cards = List<String>.from(layout);
+      final isBeforeVersionTwo =
+          version == null || version is! int || version < 2;
+      if (version == null && !cards.contains('runtimeResources')) {
+        final after = cards.indexOf('currentOutbound');
+        cards.insert(after < 0 ? cards.length : after + 1, 'runtimeResources');
+      }
+      const previousDefault = [
+        'status',
+        'outboundMode',
+        'currentProfile',
+        'currentOutbound',
+        'runtimeResources',
+        'proxyGroups',
+        'connections',
+        'serviceStatus',
+      ];
+      bool matches(List<String> expected) =>
+          cards.length == expected.length &&
+          Iterable<int>.generate(
+            cards.length,
+          ).every((i) => cards[i] == expected[i]);
+      if (isBeforeVersionTwo && matches(previousDefault)) {
+        cards
+          ..remove('runtimeResources')
+          ..insert(2, 'runtimeResources');
+      }
+      const overviewDefault = [
+        'status',
+        'outboundMode',
+        'runtimeResources',
+        'currentProfile',
+        'currentOutbound',
+        'proxyGroups',
+        'connections',
+        'serviceStatus',
+      ];
+      values['dashboardCards'] = matches(overviewDefault)
+          ? List<String>.from(defaults['dashboardCards'] as List)
+          : cards;
+    }
+    values['dashboardLayoutVersion'] = 3;
   }
 
   static Map<String, dynamic> _decode(String value) {
@@ -92,6 +171,16 @@ class SettingsService extends GetxService {
   }
 
   T value<T>(String key) => fields[key] as T;
+
+  static Map<String, dynamic> validate(Map<String, dynamic> values) =>
+      _validated({...defaults, ...values});
+
+  Future<void> setAll(Map<String, dynamic> values) => _enqueue(() async {
+    if (values.keys.any((key) => !defaults.containsKey(key))) {
+      throw const FormatException('Unknown setting');
+    }
+    await _persist(_validated({...fields, ...values}));
+  });
 
   Future<void> set(String key, dynamic value) => _enqueue(() async {
     if (!defaults.containsKey(key)) {
@@ -117,6 +206,7 @@ class SettingsService extends GetxService {
   Future<void> restore(Map<String, dynamic> values) => _enqueue(() async {
     final known = Map<String, dynamic>.from(values)
       ..removeWhere((key, _) => !defaults.containsKey(key));
+    _migrateDashboardLayout(known);
     await _persist(_validated({...defaults, ...known}));
   });
 
@@ -231,6 +321,41 @@ class SettingsService extends GetxService {
     final timeout = data['testTimeout'] as int;
     if (timeout < 1000 || timeout > 60000) {
       throw const FormatException('Timeout must be between 1000 and 60000 ms');
+    }
+    final retention = data['historyRetentionDays'] as int;
+    if (![7, 14, 30, 90].contains(retention)) {
+      throw const FormatException('Invalid history retention');
+    }
+    if (![1, 2, 5].contains(data['pollIntervalSeconds']) ||
+        ![5, 10, 30].contains(data['backgroundIntervalSeconds'])) {
+      throw const FormatException('Invalid refresh interval');
+    }
+    for (final key in ['windowWidth', 'windowHeight']) {
+      final value = data[key] as int;
+      final minimum = key == 'windowWidth' ? 390 : 640;
+      if (value < minimum || value > 4096) {
+        throw FormatException('Invalid window dimension: $key');
+      }
+    }
+    final bindings = <String>{};
+    for (final key in [
+      'shortcutWindow',
+      'shortcutConnection',
+      'shortcutMode',
+    ]) {
+      final value = data[key] as String;
+      if (!RegExp(
+            r'^(ctrl|alt|shift|meta)(\+(ctrl|alt|shift|meta))*\+[a-z0-9]$',
+          ).hasMatch(value) ||
+          !bindings.add((value.split('+')..sort()).join('+'))) {
+        throw const FormatException(
+          'Shortcut bindings must be valid and unique',
+        );
+      }
+      final parts = value.split('+');
+      if (parts.toSet().length != parts.length) {
+        throw const FormatException('Shortcut modifiers must be unique');
+      }
     }
     ResourceEnvelope.decode(data['resources'] as String);
     return {

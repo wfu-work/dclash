@@ -1,0 +1,71 @@
+abstract final class TrafficTranslations {
+  static const en = <String, String>{
+    'trafficStatistics': 'Traffic statistics',
+    'trafficHelp':
+        'Traffic handled by the core, including direct connections. Stored locally for 30 days using this device’s calendar dates.',
+    'trafficCoverage':
+        'Rankings use identified connections and can be lower than daily totals. Unidentified apps and routes appear as Unknown. Each day keeps up to 500 names per category; additional names are combined as Other.',
+    'trafficPeriod_today': 'Today',
+    'trafficPeriod_week': 'Last 7 days',
+    'trafficPeriod_month': 'Last 30 days',
+    'trafficDimension_application': 'By app',
+    'trafficDimension_domain': 'By domain',
+    'trafficDimension_node': 'By proxy',
+    'trafficSort_total': 'Total traffic',
+    'trafficSort_upload': 'Upload',
+    'trafficSort_download': 'Download',
+    'trafficRankings': 'Traffic ranking',
+    'trafficDaily': 'Daily usage',
+    'trafficDailyHelp':
+        'Select a date to view its ranking. Usage is assigned to the date when it is collected.',
+    'trafficAllDates': 'All dates in this period',
+    'trafficTotal': 'Total usage',
+    'trafficCollecting': 'Collecting',
+    'trafficStopped': 'Collection paused while disconnected',
+    'trafficPreview': 'Preview mode · no live collection',
+    'trafficUnknown': 'Unknown',
+    'trafficOther': 'Other',
+    'trafficEmpty': 'No traffic recorded yet',
+    'trafficEmptyHelp':
+        'Connect and use the network to build traffic statistics. Collection continues when you leave this page.',
+    'trafficNoResults': 'No matching traffic records',
+    'trafficSearch': 'Search ranking',
+    'trafficShowMore': 'Show more',
+    'trafficSaveFailed':
+        'Traffic is still being counted, but the latest usage could not be saved locally.',
+    'trafficRetrySave': 'Retry saving',
+  };
+
+  static const zh = <String, String>{
+    'trafficStatistics': '流量统计',
+    'trafficHelp': '统计经过内核的流量，包含直连。按本机日期在本地保留最近 30 天记录。',
+    'trafficCoverage':
+        '排行基于可识别的连接，可能少于每日总用量。无法识别的应用或线路归入“未知”。每天每个分类保留最多 500 个名称，超出部分合并为“其他”。',
+    'trafficPeriod_today': '今日',
+    'trafficPeriod_week': '近 7 天',
+    'trafficPeriod_month': '近 30 天',
+    'trafficDimension_application': '按应用',
+    'trafficDimension_domain': '按域名',
+    'trafficDimension_node': '按节点',
+    'trafficSort_total': '总流量',
+    'trafficSort_upload': '上传',
+    'trafficSort_download': '下载',
+    'trafficRankings': '流量排行',
+    'trafficDaily': '每日用量',
+    'trafficDailyHelp': '点击日期可查看当天排行。流量按采集时的日期计入。',
+    'trafficAllDates': '查看所选时段全部日期',
+    'trafficTotal': '总用量',
+    'trafficCollecting': '正在统计',
+    'trafficStopped': '未连接，统计已暂停',
+    'trafficPreview': '预览模式 · 不采集实时流量',
+    'trafficUnknown': '未知',
+    'trafficOther': '其他',
+    'trafficEmpty': '暂无流量记录',
+    'trafficEmptyHelp': '连接并访问网络后即可查看统计，离开此页面也会持续采集。',
+    'trafficNoResults': '没有匹配的流量记录',
+    'trafficSearch': '搜索排行',
+    'trafficShowMore': '显示更多',
+    'trafficSaveFailed': '流量仍在统计，但最新用量未能保存到本地。',
+    'trafficRetrySave': '重试保存',
+  };
+}

@@ -57,11 +57,6 @@ class _ConfigEditorViewState extends State<ConfigEditorView> {
         subtitle: 'yamlEditorHint'.tr,
         scroll: false,
         actions: [
-          IconButton(
-            tooltip: 'cancel'.tr,
-            onPressed: () => Navigator.pop(context),
-            icon: const AppIcon(AppIcons.close),
-          ),
           FilledButton.icon(
             onPressed: _saving ? null : _save,
             icon: const AppIcon(AppIcons.check),

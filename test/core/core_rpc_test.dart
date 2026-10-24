@@ -62,6 +62,19 @@ void main() {
     await rpc.receive(response({'id': sent.single['id'], 'result': 'ready'}));
     expect(await request, 'ready');
   });
+  test(
+    'serviceCheck allows the core budget for multiple requests and retries',
+    () async {
+      final request = rpc.invoke('serviceCheck', {
+        'names': ['netflix'],
+        'timeout': 5000,
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await rpc.receive(response({'id': sent.single['id'], 'result': []}));
+      expect(await request, isEmpty);
+      expect(rpc.pendingCount, 0);
+    },
+  );
   test('disconnect fails all correlated requests', () async {
     final request = rpc.invoke('pending');
     final expectation = expectLater(request, throwsA(isA<CoreException>()));

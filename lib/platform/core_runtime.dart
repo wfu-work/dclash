@@ -43,6 +43,7 @@ class DesktopCoreRuntime implements CoreRuntime {
   final _events = StreamController<Map<String, dynamic>>.broadcast();
   final Proxy _proxy;
   bool _proxyOwned = false;
+  int? _proxyPort;
   bool _closing = false;
   bool _cancelled = false;
   Completer<void>? _connecting;
@@ -76,6 +77,7 @@ class DesktopCoreRuntime implements CoreRuntime {
 
   @override
   Future<void> open(String homeDirectory, Map<String, dynamic> fields) async {
+    _proxyPort = (fields['mixedPort'] as num?)?.toInt() ?? 7890;
     if (!await File(corePath).exists()) {
       throw const CoreException(
         'missing_core',
@@ -182,6 +184,7 @@ class DesktopCoreRuntime implements CoreRuntime {
 
   @override
   Future<void> start(Map<String, dynamic> fields) async {
+    _proxyPort = (fields['mixedPort'] as num?)?.toInt() ?? 7890;
     await invoke('startListener');
     if (fields['systemProxy'] == true) await setSystemProxy(true, fields);
   }
@@ -228,6 +231,17 @@ class DesktopCoreRuntime implements CoreRuntime {
   Future<void> stop() async {
     await setSystemProxy(false, const {});
     if (_rpc != null) await invoke('stopListener');
+    await _recoverStaleProxy();
+  }
+
+  Future<void> _recoverStaleProxy() async {
+    final port = _proxyPort;
+    if (port != null && !await _proxy.recoverStaleProxy(port)) {
+      throw const CoreException(
+        'system_proxy',
+        '无法清理残留的系统代理，请检查 macOS 网络代理设置后重试。',
+      );
+    }
   }
 
   @override
@@ -274,6 +288,11 @@ class DesktopCoreRuntime implements CoreRuntime {
           );
         }
       }
+    }
+    try {
+      await _recoverStaleProxy();
+    } catch (e) {
+      failure ??= e;
     }
     _rpc = null;
     _server = null;

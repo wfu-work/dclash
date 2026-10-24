@@ -15,7 +15,7 @@ import 'workspace_controller.dart';
 
 class WorkspaceView extends GetView<WorkspaceController> {
   const WorkspaceView({super.key});
-  static const labels = ['dashboard', 'proxies', 'profiles', 'tools'];
+  static const labels = ['home', 'proxies', 'profiles', 'tools'];
   static const icons = [
     AppIcons.dashboard,
     AppIcons.globe,
@@ -26,8 +26,6 @@ class WorkspaceView extends GetView<WorkspaceController> {
     AppIcons.layers,
     AppIcons.terminal,
   ];
-  static const dockLabels = [...labels, 'settings'];
-  static const dockIcons = [...icons, AppIcons.settings];
   static const pages = <Widget>[
     DashboardView(),
     ProxiesView(),
@@ -236,17 +234,15 @@ class WorkspaceView extends GetView<WorkspaceController> {
         child: Obx(
           () => Row(
             children: [
-              for (var i = 0; i < dockLabels.length; i++) ...[
+              for (var i = 0; i < labels.length; i++) ...[
                 if (i > 0) const SizedBox(width: 4),
                 Expanded(
                   child: AppNavigationItem(
-                    label: dockLabels[i].tr,
-                    icon: dockIcons[i],
-                    selected: i < labels.length && controller.index.value == i,
+                    label: labels[i].tr,
+                    icon: icons[i],
+                    selected: controller.index.value == i,
                     vertical: true,
-                    onTap: () => i < labels.length
-                        ? controller.select(i)
-                        : controller.openSettings(context),
+                    onTap: () => controller.select(i),
                   ),
                 ),
               ],

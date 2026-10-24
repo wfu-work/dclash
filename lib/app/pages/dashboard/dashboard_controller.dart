@@ -17,6 +17,8 @@ class DashboardController extends GetxController {
   final downloadHistory = <double>[0].obs;
   final elapsed = Duration.zero.obs;
   final outboundIp = ''.obs;
+  final outboundError = Rxn<Object>();
+  final outboundDetectedAt = Rxn<DateTime>();
   final checking = false.obs;
   final checkingServices = false.obs;
   final serviceChecks = <Map<String, dynamic>>[].obs;
@@ -35,6 +37,8 @@ class DashboardController extends GetxController {
       _route = route;
       _probeGeneration++;
       outboundIp.value = '';
+      outboundError.value = null;
+      outboundDetectedAt.value = null;
       serviceChecks.clear();
       checking.value = checkingServices.value = false;
     });
@@ -78,9 +82,16 @@ class DashboardController extends GetxController {
   }
 
   Future<void> detectIp() async {
-    if (!core.running) throw StateError('connectFirst'.tr);
     if (checking.value) return;
+    if (!core.running) {
+      final error = StateError('connectFirst'.tr);
+      outboundError.value = error;
+      throw error;
+    }
     final generation = _probeGeneration;
+    outboundIp.value = '';
+    outboundError.value = null;
+    outboundDetectedAt.value = null;
     checking.value = true;
     try {
       final response = await core.invoke('outboundIp', {
@@ -103,9 +114,16 @@ class DashboardController extends GetxController {
       if (InternetAddress.tryParse(ip) == null) {
         throw StateError('outboundInvalid'.tr);
       }
-      if (!isClosed && generation == _probeGeneration) outboundIp.value = ip;
+      if (!isClosed && generation == _probeGeneration) {
+        outboundIp.value = ip;
+        outboundDetectedAt.value = DateTime.now();
+      }
+    } on Object catch (error) {
+      if (isClosed || generation != _probeGeneration) return;
+      outboundError.value = error;
+      rethrow;
     } finally {
-      if (generation == _probeGeneration) checking.value = false;
+      if (!isClosed && generation == _probeGeneration) checking.value = false;
     }
   }
 

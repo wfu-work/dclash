@@ -4,6 +4,7 @@ import 'package:yaml/yaml.dart';
 
 import '../../../services/core_service.dart';
 import '../../../services/settings_service.dart';
+import '../../../services/desktop_shortcut_service.dart';
 
 class SettingsController extends GetxController {
   SettingsController(this.settings, this.core);
@@ -16,7 +17,19 @@ class SettingsController extends GetxController {
     saving.value = true;
     final previous = settings.fields[key];
     var startupChanged = false;
+    final shortcuts =
+        DesktopShortcutService.keys.contains(key) &&
+            Get.isRegistered<DesktopShortcutService>()
+        ? Get.find<DesktopShortcutService>()
+        : null;
+    final previousSettings = settings.export();
+    var shortcutsChanged = false;
     try {
+      SettingsService.validate({...settings.fields, key: value});
+      if (shortcuts != null) {
+        await shortcuts.apply({...settings.fields, key: value});
+        shortcutsChanged = true;
+      }
       if (key == 'launchAtLogin') {
         await core.setLaunchAtLogin(value as bool);
         startupChanged = true;
@@ -27,10 +40,23 @@ class SettingsController extends GetxController {
         await Get.updateLocale(Locale(parts[0], parts[1]));
       }
       if (_runtimeKeys.contains(key) && core.running) await core.reload();
-    } on Object {
-      if (startupChanged) await core.setLaunchAtLogin(previous as bool);
-      if (settings.fields[key] != previous) await settings.set(key, previous);
-      rethrow;
+    } on Object catch (failure, stack) {
+      final rollbackErrors = <Object>[];
+      for (final rollback in <Future<void> Function()>[
+        if (shortcutsChanged) () => shortcuts!.apply(previousSettings),
+        if (startupChanged) () => core.setLaunchAtLogin(previous as bool),
+        if (settings.fields[key] != previous) () => settings.set(key, previous),
+      ]) {
+        try {
+          await rollback();
+        } on Object catch (error) {
+          rollbackErrors.add(error);
+        }
+      }
+      if (rollbackErrors.isNotEmpty) {
+        throw StateError('$failure\n${rollbackErrors.join('\n')}');
+      }
+      Error.throwWithStackTrace(failure, stack);
     } finally {
       saving.value = false;
     }

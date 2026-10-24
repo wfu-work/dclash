@@ -205,6 +205,7 @@ var methodHandlers = map[CoreMethod]methodHandler{
 	asyncTestDelayMethod:           withArguments(handleTestDelay),
 	watchRouteMethod:               watchRouteHandler,
 	probeMethod:                    withArguments(handleProbe),
+	explainRouteMethod:             withFallible(handleExplainRoute),
 	outboundIpMethod:               withArguments(handleOutboundIp),
 	serviceCheckMethod:             withArguments(handleServiceCheck),
 	getTrafficMethod:               withArguments(handleGetTraffic),

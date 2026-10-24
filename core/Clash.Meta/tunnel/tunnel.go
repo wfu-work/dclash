@@ -711,6 +711,64 @@ func match(metadata *C.Metadata, helper C.RuleMatchHelper) (C.Proxy, C.Rule, err
 	}
 }
 
+// ExplainRoute applies the current routing rules without opening a connection
+// or resolving DNS. Rules that need an IP see an unset address and do not
+// match; needsDNS tells the caller that the displayed route is an estimate.
+//
+// It deliberately avoids the regular match() rematch path: a REMATCH adapter
+// can update metadata by dialing, which would violate the no-I/O contract of
+// route explanation.
+func ExplainRoute(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, needsDNS, exact bool) {
+	configMux.RLock()
+	defer configMux.RUnlock()
+
+	helper := C.RuleMatchHelper{
+		ResolveIP:   func() { needsDNS = true },
+		FindProcess: func() {},
+		CheckPassRule: func(adapterName string) bool {
+			adapter, ok := proxies[adapterName]
+			if !ok {
+				return false
+			}
+			for current := adapter; current != nil; current = current.Unwrap(metadata, false) {
+				if current.Type() == C.PassRule {
+					return true
+				}
+			}
+			return false
+		},
+	}
+
+	switch mode {
+	case Direct:
+		return proxies["DIRECT"], nil, false, true
+	case Global:
+		return proxies["GLOBAL"], nil, false, true
+	}
+
+GetRules:
+	for _, candidate := range getRules(metadata) {
+		matched, adapterName := candidate.Match(metadata, helper)
+		if !matched {
+			continue
+		}
+		adapter, ok := proxies[adapterName]
+		if !ok {
+			continue
+		}
+		for current := adapter; current != nil; current = current.Unwrap(metadata, false) {
+			switch current.Type() {
+			case C.Pass:
+				continue GetRules
+			case C.Rematch:
+				return adapter, candidate, needsDNS, false
+			}
+		}
+		return adapter, candidate, needsDNS, !needsDNS
+	}
+	return proxies["DIRECT"], nil, needsDNS, !needsDNS
+}
+
 func getRules(metadata *C.Metadata) []C.Rule {
 	if sr, ok := subRules[metadata.SpecialRules]; ok {
 		log.Debugln("[Rule] use %s rules", metadata.SpecialRules)

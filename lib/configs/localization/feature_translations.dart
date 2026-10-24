@@ -1,7 +1,13 @@
 import 'script_translations.dart';
+import 'diagnostic_translations.dart';
+import 'health_translations.dart';
+import 'traffic_translations.dart';
 
 abstract final class FeatureTranslations {
   static const en = <String, String>{
+    ...DiagnosticTranslations.en,
+    ...HealthTranslations.en,
+    ...TrafficTranslations.en,
     ...ScriptTranslations.en,
     'featureProxies': 'Proxies',
     'featureProfiles': 'Profiles',
@@ -26,13 +32,12 @@ abstract final class FeatureTranslations {
     'proxyTestAll': 'Test latency',
     'proxyTestNode': 'Test this proxy',
     'proxyTimeout': 'Timeout',
-    'proxySearch': 'Search proxies',
+    'proxyProtocol': 'Protocol',
     'proxySort_default': 'Original order',
     'proxySort_name': 'Name',
     'proxySort_delay': 'Latency',
     'proxyHideUnavailable': 'Hide unavailable proxies',
     'proxyGroupTest': 'Test this group',
-    'proxySearchOpen': 'Search proxies',
     'proxyExpand': 'Expand proxy group',
     'proxyCollapse': 'Collapse proxy group',
     'proxyGroupCollapsed': 'Proxy group collapsed',
@@ -41,7 +46,7 @@ abstract final class FeatureTranslations {
     'proxyEmpty': 'Your routes will appear here',
     'proxyEmptyRunning': 'The active profile has no proxy groups.',
     'proxyEmptyConfig': 'The active profile has no proxy entries to preview.',
-    'proxyNoResults': 'Try a different search or show unavailable proxies.',
+    'proxyNoResults': 'Show unavailable proxies or select another group.',
     'proxyNodeCount': '@count proxies',
     'profileSubtitle': 'Your subscriptions and configurations, in one place.',
     'profileAdd': 'Add profile',
@@ -67,6 +72,10 @@ abstract final class FeatureTranslations {
     'profileUpdateInterval': 'Auto update',
     'profileUpdateEveryHours': 'Every @hours h',
     'profileUpdateManual': 'Manual',
+    'profileDetailSource': 'Profile type',
+    'profileDetailUpdated': 'Last updated',
+    'profileDetailUpdateMode': 'Update schedule',
+    'profileDetailExpiry': 'Expiry',
     'profileLocalDescription':
         'Stored on this device. Edit the YAML to customize your routes.',
     'profileNeverUpdated': 'Not updated yet',
@@ -273,6 +282,9 @@ abstract final class FeatureTranslations {
   };
 
   static const zh = <String, String>{
+    ...DiagnosticTranslations.zh,
+    ...HealthTranslations.zh,
+    ...TrafficTranslations.zh,
     ...ScriptTranslations.zh,
     'featureProxies': '代理',
     'featureProfiles': '配置',
@@ -297,13 +309,12 @@ abstract final class FeatureTranslations {
     'proxyTestAll': '延迟测试',
     'proxyTestNode': '测试此节点',
     'proxyTimeout': '超时',
-    'proxySearch': '搜索代理节点',
+    'proxyProtocol': '协议',
     'proxySort_default': '默认排序',
     'proxySort_name': '名称',
     'proxySort_delay': '延迟',
     'proxyHideUnavailable': '隐藏不可用节点',
     'proxyGroupTest': '测试本组延迟',
-    'proxySearchOpen': '搜索代理节点',
     'proxyExpand': '展开代理组',
     'proxyCollapse': '收起代理组',
     'proxyGroupCollapsed': '代理组已收起',
@@ -312,7 +323,7 @@ abstract final class FeatureTranslations {
     'proxyEmpty': '代理线路将在这里显示',
     'proxyEmptyRunning': '当前配置没有代理分组。',
     'proxyEmptyConfig': '当前配置没有可预览的代理节点。',
-    'proxyNoResults': '请尝试其他关键词，或显示不可用节点。',
+    'proxyNoResults': '请显示不可用节点，或选择其他代理组。',
     'proxyNodeCount': '@count 个节点',
     'profileSubtitle': '集中管理你的订阅与配置。',
     'profileAdd': '添加配置',
@@ -336,6 +347,10 @@ abstract final class FeatureTranslations {
     'profileUpdateInterval': '自动更新',
     'profileUpdateEveryHours': '每 @hours 小时',
     'profileUpdateManual': '手动',
+    'profileDetailSource': '配置类型',
+    'profileDetailUpdated': '最近更新',
+    'profileDetailUpdateMode': '自动更新',
+    'profileDetailExpiry': '到期时间',
     'profileLocalDescription': '保存在当前设备，可编辑 YAML 自定义代理与规则。',
     'profileNeverUpdated': '尚未更新',
     'profileUpdated': '更新于 @date',

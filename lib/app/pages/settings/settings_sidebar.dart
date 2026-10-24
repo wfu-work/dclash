@@ -65,6 +65,7 @@ class SettingsSidebar extends StatelessWidget {
                     ),
                     for (final section in group.sections) ...[
                       _MenuItem(
+                        key: ValueKey('settingsMenu:${section.key}'),
                         section: section,
                         selected: section == selected,
                         onTap: () => onSelected(section),
@@ -96,6 +97,7 @@ class SettingsSidebar extends StatelessWidget {
 
 class _MenuItem extends StatelessWidget {
   const _MenuItem({
+    super.key,
     required this.section,
     required this.selected,
     required this.onTap,

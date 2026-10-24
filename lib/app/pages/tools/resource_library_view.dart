@@ -16,11 +16,6 @@ class ResourceLibraryView extends GetView<ResourceLibraryController> {
         title: 'resourceLibrary'.tr,
         subtitle: 'resourceLibrarySubtitle'.tr,
         actions: [
-          IconButton(
-            tooltip: 'back'.tr,
-            onPressed: () => Navigator.pop(context),
-            icon: const AppIcon(AppIcons.close),
-          ),
           FilledButton.icon(
             onPressed: () => _edit(context),
             icon: const AppIcon(AppIcons.add, size: 18),

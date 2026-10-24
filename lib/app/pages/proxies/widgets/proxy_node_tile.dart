@@ -22,6 +22,44 @@ class ProxyNodeTile extends StatelessWidget {
   final int? delay;
   final VoidCallback? onSelect, onTest;
 
+  static const _gridPadding = EdgeInsets.all(18);
+  static const _nameMaxLines = 2;
+  static const _protocolGap = 7.0;
+  static const _protocolPadding = EdgeInsets.symmetric(
+    horizontal: 8,
+    vertical: 3,
+  );
+
+  static double gridMainAxisExtent(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final textScaler = MediaQuery.textScalerOf(context);
+    double textHeight(TextStyle? style, int lines) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: List.filled(lines, '国Ag').join('\n'),
+          style: style,
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: textScaler,
+      )..layout();
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    // Reserve two name lines and the padded badge, with room for font rounding.
+    return (_gridPadding.vertical +
+            textHeight(
+              textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+              _nameMaxLines,
+            ) +
+            _protocolGap +
+            _protocolPadding.vertical +
+            textHeight(textTheme.labelSmall, 1) +
+            8)
+        .ceilToDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -50,7 +88,7 @@ class ProxyNodeTile extends StatelessWidget {
       child: InkWell(
         onTap: onSelect,
         child: Padding(
-          padding: EdgeInsets.all(compact ? 14 : 18),
+          padding: compact ? const EdgeInsets.all(14) : _gridPadding,
           child: Row(
             children: [
               AppIcon(
@@ -66,17 +104,36 @@ class ProxyNodeTile extends StatelessWidget {
                   children: [
                     Text(
                       node.name,
-                      maxLines: compact ? 1 : 2,
+                      maxLines: compact ? 1 : _nameMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      node.type,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colors.onSurfaceVariant,
+                    const SizedBox(height: _protocolGap),
+                    Semantics(
+                      label: '${'proxyProtocol'.tr}: ${node.type}',
+                      child: DecoratedBox(
+                        key: ValueKey('proxyProtocol_${node.name}'),
+                        decoration: ShapeDecoration(
+                          color: selected
+                              ? colors.primary.withValues(alpha: .10)
+                              : colors.surfaceContainerLow,
+                          shape: AppShapes.pill,
+                        ),
+                        child: Padding(
+                          padding: _protocolPadding,
+                          child: Text(
+                            '${'proxyProtocol'.tr} · ${node.type}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: selected
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],

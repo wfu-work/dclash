@@ -61,4 +61,11 @@ class Proxy {
       String() => false,
     };
   }
+
+  /// Clears only a dead macOS loopback proxy at this application's port.
+  /// Unlike stopProxy, this also works after the owning runtime has gone away.
+  Future<bool> recoverStaleProxy(int port) async {
+    if (!Platform.isMacOS) return true;
+    return _macosProxy.recoverStale(port);
+  }
 }

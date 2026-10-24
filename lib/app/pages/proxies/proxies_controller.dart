@@ -11,7 +11,6 @@ class ProxiesController extends GetxController {
   final CoreService core;
   final SettingsService settings;
   final query = ''.obs;
-  final searchOpen = false.obs;
   final selectedGroup = ''.obs;
   final grid = true.obs;
   final testing = <String>{}.obs;
@@ -127,10 +126,6 @@ class ProxiesController extends GetxController {
   Future<void> setSort(String value) => settings.set('proxySort', value);
   Future<void> setHideUnavailable(bool value) =>
       settings.set('hideUnavailable', value);
-  void toggleSearch() {
-    searchOpen.toggle();
-    if (!searchOpen.value) query.value = '';
-  }
 
   Future<void> toggleLayout() async {
     final next = !grid.value;

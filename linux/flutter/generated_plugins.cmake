@@ -6,6 +6,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links_linux
   dynamic_color
   flutter_secure_storage_linux
+  hotkey_manager_linux
+  local_notifier
   screen_retriever_linux
   tray
   url_launcher_linux

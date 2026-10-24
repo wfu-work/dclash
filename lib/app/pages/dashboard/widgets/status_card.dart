@@ -21,7 +21,10 @@ class StatusCard extends StatelessWidget {
     final core = controller.core;
     final status = core.status.value;
     final active = core.running;
-    return AppCard(child: _layout(context, core, status, active));
+    return AppCard(
+      key: const ValueKey('dashboardStatusCard'),
+      child: _layout(context, core, status, active),
+    );
   });
 
   Widget _layout(
@@ -30,8 +33,8 @@ class StatusCard extends StatelessWidget {
     CoreStatus status,
     bool active,
   ) {
-    final details = _details(context, core, status, active);
-    final trailing = controller.profiles.active == null
+    final hasProfile = controller.profiles.active != null;
+    final trailing = !hasProfile
         ? TextButton.icon(
             onPressed: () => Get.find<WorkspaceController>().select(2),
             icon: const AppIcon(AppIcons.addLink, size: 18),
@@ -42,45 +45,63 @@ class StatusCard extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          details,
-          const SizedBox(height: 14),
-          Align(alignment: Alignment.centerRight, child: trailing),
+          _statusLine(context, status, active),
+          const SizedBox(height: 18),
+          _identity(context, core, active, includeUptime: false),
+          const SizedBox(height: 20),
+          _compactControls(context, hasProfile: hasProfile, trailing: trailing),
+          if (!hasProfile) ...[const SizedBox(height: 14)],
         ],
       );
     }
     return Row(
       children: [
-        Expanded(child: details),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _statusLine(context, status, active),
+              const SizedBox(height: 20),
+              _identity(context, core, active, includeUptime: true),
+            ],
+          ),
+        ),
         const SizedBox(width: 16),
         trailing,
       ],
     );
   }
 
-  Widget _details(
-    BuildContext context,
-    CoreService core,
-    CoreStatus status,
-    bool active,
-  ) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 8,
+  Widget _statusLine(BuildContext context, CoreStatus status, bool active) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('status'.tr, style: Theme.of(context).textTheme.titleSmall),
-          AppPill(
-            label: status.name.tr,
-            color: status == CoreStatus.failed
-                ? Theme.of(context).colorScheme.error
-                : active
-                ? const Color(0xFF23944D)
-                : Theme.of(context).colorScheme.onSurfaceVariant,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            children: [
+              Text('status'.tr, style: Theme.of(context).textTheme.titleSmall),
+              AppPill(
+                label: status.name.tr,
+                color: status == CoreStatus.failed
+                    ? Theme.of(context).colorScheme.error
+                    : active
+                    ? const Color(0xFF23944D)
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
           ),
         ],
-      ),
-      const SizedBox(height: 20),
+      );
+
+  Widget _identity(
+    BuildContext context,
+    CoreService core,
+    bool active, {
+    required bool includeUptime,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
       Text(
         active ? 'appTagline'.tr : 'brandName'.tr,
         style: Theme.of(
@@ -98,7 +119,14 @@ class StatusCard extends StatelessWidget {
         const SizedBox(height: 12),
         _errorPanel(context, message),
       ],
-      const SizedBox(height: 22),
+      if (includeUptime) ...[const SizedBox(height: 22), _uptime(context)],
+    ],
+  );
+
+  Widget _uptime(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
       Text('uptime'.tr, style: Theme.of(context).textTheme.labelSmall),
       const SizedBox(height: 3),
       Text(
@@ -112,35 +140,53 @@ class StatusCard extends StatelessWidget {
     ],
   );
 
+  Widget _compactControls(
+    BuildContext context, {
+    required bool hasProfile,
+    required Widget trailing,
+  }) => LayoutBuilder(
+    builder: (context, box) {
+      final stacked =
+          !hasProfile ||
+          box.maxWidth < 290 ||
+          MediaQuery.textScalerOf(context).scale(14) > 18;
+      if (stacked) {
+        return Column(
+          key: const ValueKey('dashboardStatusControls'),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _uptime(context),
+            const SizedBox(height: 10),
+            Align(alignment: Alignment.centerRight, child: trailing),
+          ],
+        );
+      }
+      return Row(
+        key: const ValueKey('dashboardStatusControls'),
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [_uptime(context), const Spacer(), trailing],
+      );
+    },
+  );
+
   Widget _connectionControls(
     BuildContext context, {
     required bool active,
     required CoreStatus status,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        ConnectButton(
-          status: status,
-          onPressed:
-              status == CoreStatus.starting || status == CoreStatus.stopping
-              ? null
-              : () => _toggle(context),
-        ),
-        const SizedBox(height: 10),
-        AppPill(
-          label: active ? 'stop'.tr : 'start'.tr,
-          color: status == CoreStatus.failed
-              ? colors.error
-              : active
-              ? colors.primary
-              : colors.onSurfaceVariant,
-        ),
-      ],
-    );
-  }
+  }) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      ConnectButton(
+        size: compact ? 68 : 80,
+        status: status,
+        onPressed:
+            status == CoreStatus.starting || status == CoreStatus.stopping
+            ? null
+            : () => _toggle(context),
+      ),
+    ],
+  );
 
   Widget _errorPanel(BuildContext context, String message) {
     final colors = Theme.of(context).colorScheme;

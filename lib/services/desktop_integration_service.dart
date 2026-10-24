@@ -3,12 +3,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:proxy/proxy.dart';
 import 'package:tray/tray.dart';
 import 'package:window/window.dart';
 
 import '../app/widgets/app_message.dart';
 import '../domains/clash_connection.dart';
 import '../domains/core_status.dart';
+import '../platform/core_rpc.dart';
 import 'core_service.dart';
 import 'settings_service.dart';
 
@@ -59,6 +61,8 @@ class DesktopIntegrationService extends GetxService with WindowListener {
   StreamSubscription<TrayEvent>? _traySubscription;
   StreamSubscription<ProcessSignal>? _signalSubscription;
   Worker? _worker;
+  Timer? _sizeTimer;
+  bool _maximized = false, _fullScreen = false;
   bool _trayUpdateRunning = false;
   bool _trayUpdatePending = false;
   bool _quitting = false;
@@ -71,7 +75,16 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     if (!supported) return;
     await _window.ensureInitialized();
     await _window.setMinimumSize(const Size(390, 640));
-    await _window.setSize(const Size(1240, 850));
+    await _window.setSize(
+      Size(
+        settings.fields['rememberWindowSize'] == true
+            ? (settings.fields['windowWidth'] as int).toDouble()
+            : 1240,
+        settings.fields['rememberWindowSize'] == true
+            ? (settings.fields['windowHeight'] as int).toDouble()
+            : 850,
+      ),
+    );
     await _window.center();
     await _window.setPreventClose(true);
     _window.addListener(this);
@@ -85,7 +98,16 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     }
     if (preview) return;
     try {
+      await _recoverSystemProxy();
+    } on Object catch (error) {
+      core.error.value = error.toString();
+      _report(error);
+    }
+    try {
       await _updateTray();
+      if (settings.fields['startHidden'] == true && Tray.instance.isVisible) {
+        await _hideToTray();
+      }
       _traySubscription = Tray.instance.events.listen((event) {
         if (event is TrayIconActivated) {
           unawaited(_show().catchError(_report));
@@ -105,11 +127,64 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     }
   }
 
+  Future<void> showWindow() => _show();
+
+  Future<void> toggleWindow() =>
+      _windowVisible && Tray.instance.isVisible ? _hideToTray() : _show();
+
+  Future<void> recoverSystemProxy() async {
+    if (core.status.value != CoreStatus.stopped &&
+        core.status.value != CoreStatus.failed) {
+      throw StateError('helperStopFirst'.tr);
+    }
+    await _recoverSystemProxy();
+  }
+
+  Future<void> _saveSize() async {
+    if (preview ||
+        !_ready ||
+        _maximized ||
+        _fullScreen ||
+        settings.fields['rememberWindowSize'] != true) {
+      return;
+    }
+    final size = await _window.getSize();
+    final width = size.width.round().clamp(390, 4096);
+    final height = size.height.round().clamp(640, 4096);
+    if (width != settings.fields['windowWidth'] ||
+        height != settings.fields['windowHeight']) {
+      await settings.setAll({'windowWidth': width, 'windowHeight': height});
+    }
+  }
+
+  @override
+  void onWindowGeometryChanged() {
+    _sizeTimer?.cancel();
+    _sizeTimer = Timer(
+      const Duration(milliseconds: 500),
+      () => unawaited(_saveSize().catchError(_report)),
+    );
+  }
+
+  @override
+  void onWindowMaximize() => _maximized = true;
+  @override
+  void onWindowUnmaximize() => _maximized = false;
+  @override
+  void onWindowEnterFullScreen() => _fullScreen = true;
+  @override
+  void onWindowLeaveFullScreen() => _fullScreen = false;
+  @override
+  void onWindowMinimize() => core.setForeground(false);
+  @override
+  void onWindowRestore() => core.setForeground(true);
+
   Future<void> _show() async {
     if (_quitting) return;
     await _window.show();
     await _window.focus();
     _windowVisible = true;
+    core.setForeground(true);
     _requestTrayUpdate();
   }
 
@@ -117,6 +192,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     if (_quitting) return;
     await _window.hide();
     _windowVisible = false;
+    core.setForeground(false);
     _requestTrayUpdate();
   }
 
@@ -360,23 +436,39 @@ class DesktopIntegrationService extends GetxService with WindowListener {
   @override
   void onWindowShow() {
     _windowVisible = true;
+    core.setForeground(true);
     _requestTrayUpdate();
   }
 
   @override
   void onWindowHide() {
     _windowVisible = false;
+    core.setForeground(false);
     _requestTrayUpdate();
   }
 
   @override
   void onWindowShouldTerminate() => unawaited(quit());
 
+  Future<void> _recoverSystemProxy() async {
+    if (preview || !Platform.isMacOS) return;
+    final port = (settings.fields['mixedPort'] as num?)?.toInt() ?? 7890;
+    if (!await Proxy().recoverStaleProxy(port)) {
+      throw const CoreException(
+        'system_proxy',
+        '无法恢复系统网络代理，请在 macOS 网络设置中检查 HTTP、HTTPS 和 SOCKS 代理后重试。',
+      );
+    }
+  }
+
   Future<void> quit() async {
     if (_quitting) return;
     _quitting = true;
     try {
+      _sizeTimer?.cancel();
+      await _saveSize().catchError(_report);
       await core.stop();
+      await _recoverSystemProxy();
       if (!preview) await Tray.instance.hide();
       await beforeExit?.call();
       await core.disposeRuntime();
@@ -400,6 +492,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
   }
 
   Future<void> disposeIntegration() async {
+    _sizeTimer?.cancel();
     if (_ready) _window.removeListener(this);
     _worker?.dispose();
     _worker = null;

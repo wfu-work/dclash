@@ -35,6 +35,7 @@ const (
 	resetTrafficMethod             CoreMethod = "resetTraffic"
 	asyncTestDelayMethod           CoreMethod = "asyncTestDelay"
 	probeMethod                    CoreMethod = "probe"
+	explainRouteMethod             CoreMethod = "explainRoute"
 	outboundIpMethod               CoreMethod = "outboundIp"
 	serviceCheckMethod             CoreMethod = "serviceCheck"
 	getConnectionsMethod           CoreMethod = "getConnections"
@@ -221,6 +222,28 @@ type ProbeResult struct {
 	// response headers, and ProbeResult is the shape the Dart side decodes.
 	header    http.Header
 	lowerBody string
+}
+
+type ExplainRouteParams struct {
+	Url string `json:"url"`
+}
+
+// RouteExplanation represents an estimated route. It is produced by static
+// rule matching and never establishes a network connection.
+type RouteExplanation struct {
+	Url         string `json:"url"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Rule        string `json:"rule"`
+	RulePayload string `json:"rule-payload"`
+	Route       string `json:"route"`
+	Selected    string `json:"selected"`
+	Final       string `json:"final"`
+	NeedsDNS    bool   `json:"needs-dns"`
+	Exact       bool   `json:"exact"`
+
+	CoreEpoch    uint64 `json:"core-epoch"`
+	PicksVersion uint64 `json:"picks-version"`
 }
 
 type Traffic struct {

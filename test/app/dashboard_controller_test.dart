@@ -40,6 +40,8 @@ void main() {
       core.response.complete({'body': '{"ip":"1.1.1.1"}'});
       await detection;
       expect(controller.outboundIp.value, isEmpty);
+      expect(controller.outboundDetectedAt.value, isNull);
+      expect(controller.outboundError.value, isNull);
       expect(controller.checking.value, false);
 
       core.response = Completer<dynamic>();
@@ -67,6 +69,50 @@ void main() {
       core.response.complete({'body': '<html>rate limited</html>'});
       await expectLater(controller.detectIp(), throwsStateError);
       expect(controller.outboundIp.value, isEmpty);
+      expect(controller.outboundError.value, isStateError);
+      expect(controller.outboundDetectedAt.value, isNull);
+      expect(controller.checking.value, false);
+
+      core.response = Completer<dynamic>();
+      final retry = controller.detectIp();
+      expect(controller.outboundError.value, isNull);
+      expect(controller.checking.value, true);
+      core.response.complete({'body': '{"ip":"1.1.1.1"}'});
+      await retry;
+      expect(controller.outboundIp.value, '1.1.1.1');
+      expect(controller.outboundDetectedAt.value, isNotNull);
+      expect(controller.checking.value, false);
+
+      core.status.value = CoreStatus.stopped;
+      expect(controller.outboundIp.value, isEmpty);
+      expect(controller.outboundDetectedAt.value, isNull);
+      expect(controller.outboundError.value, isNull);
+    },
+  );
+
+  test(
+    'a stale failure cannot replace or finish a newer outbound check',
+    () async {
+      final settings = SettingsService(memoryOnly: true);
+      await settings.initialize();
+      final profiles = ProfileService();
+      final core = _ProbeCore(profiles, settings)
+        ..status.value = CoreStatus.running;
+      final controller = DashboardController(core, profiles, settings)
+        ..onInit();
+      addTearDown(controller.onClose);
+      final oldResponse = core.response;
+      final oldCheck = controller.detectIp();
+      await settings.set('mode', 'direct');
+      core.response = Completer<dynamic>();
+      final newCheck = controller.detectIp();
+      oldResponse.completeError(StateError('old route timed out'));
+      await oldCheck;
+      expect(controller.checking.value, true);
+      expect(controller.outboundError.value, isNull);
+      core.response.complete({'body': '203.0.113.8'});
+      await newCheck;
+      expect(controller.outboundIp.value, '203.0.113.8');
       expect(controller.checking.value, false);
     },
   );

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../domains/clash_connection.dart';
 import '../domains/core_status.dart';
 import '../domains/proxy_group.dart';
+import '../domains/traffic_statistics.dart';
 import '../platform/core_lifecycle.dart';
 import '../platform/core_rpc.dart';
 import '../platform/core_runtime.dart';
@@ -19,7 +21,7 @@ import 'config_builder.dart';
 import 'profile_service.dart';
 import 'settings_service.dart';
 
-class CoreService extends GetxService {
+class CoreService extends GetxService with WidgetsBindingObserver {
   CoreService(
     this.profiles,
     this.settings, {
@@ -43,10 +45,13 @@ class CoreService extends GetxService {
   final error = RxnString();
   final groups = <ProxyGroup>[].obs;
   final connections = <ClashConnection>[].obs;
+  final trafficUpdate = Rxn<CoreTrafficUpdate>();
   final logs = <CoreLog>[].obs;
   final requests = <Map<String, dynamic>>[].obs;
   final dnsQueries = <Map<String, dynamic>>[].obs;
   final providers = <Map<String, dynamic>>[].obs;
+  final routeState = <String, dynamic>{}.obs;
+  final _routeWatchers = <Object>{};
   final upload = 0.obs,
       download = 0.obs,
       totalUpload = 0.obs,
@@ -62,6 +67,8 @@ class CoreService extends GetxService {
   String _observedProfile = '';
   bool _initialized = false;
   bool _polling = false;
+  bool _foreground = true;
+  int? _scheduledInterval;
   bool _maintenance = false;
   int _epoch = 0;
   String _appliedSettings = '';
@@ -72,6 +79,7 @@ class CoreService extends GetxService {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+    WidgetsBinding.instance.addObserver(this);
     if (preview) {
       version.value = 'Preview fixture · mihomo';
       groups.assignAll(const [
@@ -88,6 +96,9 @@ class CoreService extends GetxService {
       return;
     }
     _settingsWorker = debounce(settings.fields, (_) {
+      if (running && _scheduledInterval != pollIntervalSeconds) {
+        _schedulePoll(_epoch);
+      }
       if (_lifecycle.desired &&
           _desiredFingerprint != _fingerprint(settings.fields)) {
         unawaited(reload().catchError(_recordError));
@@ -214,6 +225,28 @@ class CoreService extends GetxService {
         await _tearDown();
         return;
       }
+      TrafficAmount? baseline;
+      try {
+        final counters = _map(
+          await runtime
+              .invoke('getTotalTraffic', false)
+              .timeout(const Duration(seconds: 1)),
+        );
+        if (counters['up'] is num && counters['down'] is num) {
+          baseline = TrafficAmount(
+            _integer(counters['up']),
+            _integer(counters['down']),
+          );
+        }
+      } on Object {
+        // If the optional baseline is unavailable, the first poll seeds it.
+      }
+      if (epoch != _epoch || revision != _lifecycle.revision) return;
+      trafficUpdate.value = CoreTrafficUpdate(
+        session: epoch,
+        baseline: true,
+        totals: baseline,
+      );
       final content = await ConfigBuilder.build(
         await profiles.readContent(profile),
         fields,
@@ -308,10 +341,22 @@ class CoreService extends GetxService {
   Future<void> _tearDown() async {
     _pollTimer?.cancel();
     _pollTimer = null;
-    ++_epoch;
+    final closingEpoch = _epoch++;
     final runtime = _runtime;
     Object? failure;
     if (runtime != null) {
+      if (startedAt.value != null) {
+        try {
+          final snapshot = _map(
+            await runtime
+                .invoke('getConnections')
+                .timeout(const Duration(seconds: 1)),
+          );
+          _publishTrafficSnapshot(snapshot, closingEpoch);
+        } on Object {
+          // Statistics must never prevent a failed core from stopping.
+        }
+      }
       try {
         await runtime.stop();
       } catch (e) {
@@ -326,6 +371,7 @@ class CoreService extends GetxService {
     }
     await _eventSubscription?.cancel();
     _eventSubscription = null;
+    routeState.clear();
     startedAt.value = null;
     upload.value = download.value = memory.value = 0;
     connections.clear();
@@ -336,9 +382,36 @@ class CoreService extends GetxService {
     }
   }
 
+  int get pollIntervalSeconds =>
+      !_foreground && settings.fields['reduceBackgroundRefresh'] == true
+      ? settings.fields['backgroundIntervalSeconds'] as int? ?? 5
+      : settings.fields['pollIntervalSeconds'] as int? ?? 1;
+
+  void setForeground(bool value) {
+    if (_foreground == value) return;
+    _foreground = value;
+    if (running) _schedulePoll(_epoch);
+  }
+
+  Future<void> restart() async {
+    if (!running) {
+      throw const CoreException('not_running', 'Connect before restarting');
+    }
+    await stop();
+    await start();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (Platform.isAndroid || Platform.isIOS) {
+      setForeground(state == AppLifecycleState.resumed);
+    }
+  }
+
   void _schedulePoll(int epoch) {
+    _scheduledInterval = pollIntervalSeconds;
     _pollTimer?.cancel();
-    _pollTimer = Timer(const Duration(seconds: 1), () async {
+    _pollTimer = Timer(Duration(seconds: pollIntervalSeconds), () async {
       if (!running || epoch != _epoch) return;
       try {
         await _poll(epoch);
@@ -406,34 +479,76 @@ class CoreService extends GetxService {
       download.value = _integer(traffic['down']);
       totalUpload.value = _integer(total['up']);
       totalDownload.value = _integer(total['down']);
-      memory.value =
-          _integer(stats['heapInuse']) +
-          _integer(stats['stackInuse']) +
-          _integer(stats['runtimeOther']);
-      final entries = (snapshot['connections'] as List? ?? []).take(5000);
-      connections.assignAll(
-        entries.whereType<Map>().map((raw) {
-          final c = _map(raw), metadata = _map(c['metadata']);
-          return ClashConnection(
-            id: '${c['id'] ?? ''}',
-            host: '${metadata['host'] ?? metadata['destinationIP'] ?? ''}',
-            network: '${metadata['network'] ?? ''}',
-            source:
-                '${metadata['sourceIP'] ?? ''}:${metadata['sourcePort'] ?? ''}',
-            destination:
-                '${metadata['destinationIP'] ?? ''}:${metadata['destinationPort'] ?? ''}',
-            rule: '${c['rule'] ?? ''}',
-            chains: List<String>.from(c['chains'] as List? ?? []),
-            upload: _integer(c['upload']),
-            download: _integer(c['download']),
-            startedAt: DateTime.tryParse('${c['start']}') ?? DateTime.now(),
-            process: '${metadata['process'] ?? metadata['processPath'] ?? ''}',
-          );
-        }),
+      // RSS represents the memory currently resident in the core process.
+      // Older cores may omit it, so retain the runtime-allocation total as a
+      // compatible fallback.
+      final rss = _integer(stats['rss']);
+      memory.value = rss > 0
+          ? rss
+          : _integer(stats['heapInuse']) +
+                _integer(stats['stackInuse']) +
+                _integer(stats['runtimeOther']);
+      final entries = (snapshot['connections'] as List? ?? [])
+          .whereType<Map>()
+          .take(10000)
+          .map(_connectionFromMap)
+          .toList();
+      connections.assignAll(entries.take(5000));
+      _publishTrafficSnapshot(
+        snapshot,
+        epoch,
+        total: total,
+        parsedConnections: entries,
       );
     } finally {
       _polling = false;
     }
+  }
+
+  static ClashConnection _connectionFromMap(Map raw) {
+    final c = _map(raw), metadata = _map(c['metadata']);
+    String firstValue(String first, String fallback) {
+      final text = '${metadata[first] ?? ''}';
+      return text.isNotEmpty ? text : '${metadata[fallback] ?? ''}';
+    }
+
+    return ClashConnection(
+      id: '${c['id'] ?? ''}',
+      host: firstValue('host', 'destinationIP'),
+      network: '${metadata['network'] ?? ''}',
+      source: '${metadata['sourceIP'] ?? ''}:${metadata['sourcePort'] ?? ''}',
+      destination:
+          '${metadata['destinationIP'] ?? ''}:${metadata['destinationPort'] ?? ''}',
+      rule: '${c['rule'] ?? ''}',
+      chains: (c['chains'] as List? ?? []).whereType<String>().toList(),
+      upload: _integer(c['upload']),
+      download: _integer(c['download']),
+      startedAt: DateTime.tryParse('${c['start']}') ?? DateTime.now(),
+      process: firstValue('process', 'processPath'),
+    );
+  }
+
+  void _publishTrafficSnapshot(
+    Map<String, dynamic> snapshot,
+    int session, {
+    Map<String, dynamic>? total,
+    List<ClashConnection>? parsedConnections,
+  }) {
+    final up = snapshot['uploadTotal'] ?? total?['up'];
+    final down = snapshot['downloadTotal'] ?? total?['down'];
+    trafficUpdate.value = CoreTrafficUpdate(
+      session: session,
+      totals: up is num && down is num
+          ? TrafficAmount(_integer(up), _integer(down))
+          : null,
+      connections:
+          parsedConnections ??
+          (snapshot['connections'] as List? ?? [])
+              .whereType<Map>()
+              .take(10000)
+              .map(_connectionFromMap)
+              .toList(),
+    );
   }
 
   void _handleEvent(Map<String, dynamic> event) {
@@ -453,6 +568,10 @@ class CoreService extends GetxService {
         );
       case 'request':
         _append(requests, data, 1000);
+        trafficUpdate.value = CoreTrafficUpdate(
+          session: _epoch,
+          connections: [_connectionFromMap(data)],
+        );
       case 'dns':
         _append(dnsQueries, data, 1000);
       case 'delay':
@@ -460,9 +579,22 @@ class CoreService extends GetxService {
         if (name is String) delays[name] = _integer(data['value']);
       case 'loaded':
         if (running) unawaited(refreshRuntime().catchError(_recordError));
+      case 'routeChanged':
+        _updateRouteState(data);
       case 'requestTraffic':
         final updates = event['data'];
         if (updates is List) {
+          trafficUpdate.value = CoreTrafficUpdate(
+            session: _epoch,
+            counters: [
+              for (final raw in updates.whereType<Map>())
+                ConnectionTrafficCounter(
+                  '${raw['id'] ?? ''}',
+                  _integer(raw['upload']),
+                  _integer(raw['download']),
+                ),
+            ],
+          );
           final byId = <String, Map<String, dynamic>>{
             for (final raw in updates.whereType<Map>())
               '${raw['id']}': Map<String, dynamic>.from(raw),
@@ -591,6 +723,34 @@ class CoreService extends GetxService {
     _messageResult(await invoke('updateGeoData', name));
   }
 
+  /// Watches only while a diagnostic page needs route validity information.
+  /// Owners share the native watch so closing one page cannot stop another.
+  Future<void> setRouteWatching(Object owner, {required bool enabled}) async {
+    if (enabled) {
+      _routeWatchers.add(owner);
+    } else {
+      _routeWatchers.remove(owner);
+    }
+    if (!running || preview) return;
+    final epoch = _epoch;
+    final response = await invoke('watchRoute', _routeWatchers.isNotEmpty);
+    if (epoch == _epoch && running) _updateRouteState(_map(response));
+  }
+
+  void _updateRouteState(Map<String, dynamic> data) {
+    final epoch = data['core-epoch'], picks = data['picks-version'];
+    if (epoch is! int || picks is! int) return;
+    final previousEpoch = routeState['core-epoch'] as int?;
+    final previousPicks = routeState['picks-version'] as int?;
+    if (previousEpoch != null &&
+        (epoch < previousEpoch ||
+            (epoch == previousEpoch && picks < (previousPicks ?? 0)))) {
+      return;
+    }
+    if (epoch == previousEpoch && picks == previousPicks) return;
+    routeState.assignAll(data);
+  }
+
   Future<dynamic> invoke(String method, [dynamic arguments]) async {
     if (preview) {
       throw const CoreException(
@@ -628,6 +788,7 @@ class CoreService extends GetxService {
   }
 
   Future<void> disposeRuntime() async {
+    if (_initialized) WidgetsBinding.instance.removeObserver(this);
     _settingsWorker?.dispose();
     _profileWorker?.dispose();
     _profileContentWorker?.dispose();

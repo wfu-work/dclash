@@ -223,12 +223,12 @@ class _StructuredConfigEditorViewState
         title: widget.title.tr,
         subtitle: 'cfgEditorSubtitle'.tr,
         scroll: false,
+        leading: IconButton(
+          tooltip: 'back'.tr,
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          icon: const AppIcon(AppIcons.arrowLeft),
+        ),
         actions: [
-          IconButton(
-            tooltip: 'featureCancel'.tr,
-            onPressed: _saving ? null : () => Navigator.pop(context),
-            icon: const AppIcon(AppIcons.close),
-          ),
           FilledButton.icon(
             onPressed: _saving ? null : _save,
             icon: _saving

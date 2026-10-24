@@ -147,7 +147,9 @@ class AppDropdown<T> extends StatelessWidget {
           child: Row(
             mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              selected?.child ?? hint ?? const SizedBox.shrink(),
+              Flexible(
+                child: selected?.child ?? hint ?? const SizedBox.shrink(),
+              ),
               const SizedBox(width: 8),
               icon ?? const AppIcon(AppIcons.chevronDown, size: 16),
             ],

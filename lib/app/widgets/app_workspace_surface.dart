@@ -19,7 +19,13 @@ class AppWorkspaceSurface extends StatelessWidget {
           ? const EdgeInsets.fromLTRB(0, 8, 8, 8)
           : EdgeInsets.zero,
       child: Material(
-        color: Theme.of(context).colorScheme.surface,
+        // On desktop, the rounded work area is the primary canvas. Give the
+        // panel the bright elevated surface so it clearly separates from the
+        // softer window and navigation backgrounds around it. Mobile keeps
+        // its edge-to-edge page surface.
+        color: desktop
+            ? Theme.of(context).colorScheme.surfaceContainerHigh
+            : Theme.of(context).colorScheme.surface,
         shape: desktop
             ? AppShapes.workspace.copyWith(
                 side: BorderSide(

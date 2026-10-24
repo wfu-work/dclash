@@ -15,13 +15,6 @@ class ProvidersView extends StatelessWidget {
         child: AppPage(
           maxContentWidth: 820,
           title: 'providers'.tr,
-          actions: [
-            IconButton(
-              tooltip: 'back'.tr,
-              onPressed: () => Navigator.pop(context),
-              icon: const AppIcon(AppIcons.close),
-            ),
-          ],
           child: Obx(
             () => Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

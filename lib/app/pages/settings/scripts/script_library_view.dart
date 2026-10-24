@@ -33,11 +33,6 @@ class ScriptLibraryView extends GetView<ScriptLibraryService> {
                 PopupMenuItem(value: 'remote', child: Text('scriptImport'.tr)),
               ],
             ),
-            IconButton(
-              tooltip: 'back'.tr,
-              onPressed: () => Navigator.pop(context),
-              icon: const AppIcon(AppIcons.close),
-            ),
           ],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

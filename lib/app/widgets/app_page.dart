@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import 'app_icon.dart';
 
 class AppPage extends StatelessWidget {
   const AppPage({
@@ -10,6 +13,8 @@ class AppPage extends StatelessWidget {
     required this.child,
     this.scroll = true,
     this.maxContentWidth = 1200,
+    this.automaticallyImplyLeading = true,
+    this.actionsInlineOnCompact = false,
   });
   final String title;
   final Widget? leading;
@@ -18,6 +23,14 @@ class AppPage extends StatelessWidget {
   final Widget child;
   final bool scroll;
   final double maxContentWidth;
+
+  /// Shows the shared back control for pages displayed on a nested route.
+  /// Embedded pages can disable this when their parent already owns navigation.
+  final bool automaticallyImplyLeading;
+
+  /// Lets a compact page keep a small action cluster aligned with its title.
+  /// Pages with long headings retain the wrapped action layout by default.
+  final bool actionsInlineOnCompact;
 
   @override
   Widget build(BuildContext context) => Align(
@@ -28,12 +41,24 @@ class AppPage extends StatelessWidget {
         builder: (context, box) {
           final compact = box.maxWidth < 600;
           final padding = compact ? 16.0 : 24.0;
+          final inlineCompactActions =
+              actionsInlineOnCompact &&
+              MediaQuery.textScalerOf(context).scale(14) <= 18;
           final wrapActions =
               actions.isNotEmpty &&
-              ((box.maxWidth < 500) ||
-                  MediaQuery.textScalerOf(context).scale(14) > 19);
+              (!inlineCompactActions &&
+                  ((box.maxWidth < 500) ||
+                      MediaQuery.textScalerOf(context).scale(14) > 19));
           final pageLeading =
-              leading ?? AppPageLeading.maybeOf(context)?.leading;
+              leading ??
+              AppPageLeading.maybeOf(context)?.leading ??
+              (automaticallyImplyLeading && Navigator.canPop(context)
+                  ? IconButton(
+                      tooltip: 'back'.tr,
+                      onPressed: () => Navigator.maybePop(context),
+                      icon: const AppIcon(AppIcons.arrowLeft),
+                    )
+                  : null);
           final headingContent = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -54,7 +79,11 @@ class AppPage extends StatelessWidget {
                     Expanded(child: headingContent),
                   ],
                 );
-          final controls = Wrap(spacing: 6, runSpacing: 4, children: actions);
+          final controls = Wrap(
+            spacing: compact ? 2 : 6,
+            runSpacing: 4,
+            children: actions,
+          );
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -75,10 +104,13 @@ class AppPage extends StatelessWidget {
                         ],
                       )
                     : Row(
+                        crossAxisAlignment: inlineCompactActions
+                            ? CrossAxisAlignment.start
+                            : CrossAxisAlignment.center,
                         children: [
                           Expanded(child: heading),
                           if (actions.isNotEmpty) ...[
-                            const SizedBox(width: 16),
+                            SizedBox(width: compact ? 8 : 16),
                             controls,
                           ],
                         ],

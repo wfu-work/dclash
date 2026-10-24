@@ -55,9 +55,19 @@ class CoreRpc {
           jsonEncode({'id': id, 'method': method, 'arguments': arguments}),
         ),
       );
-      final requestTimeout = method == 'setupConfig'
+      var requestTimeout = method == 'setupConfig'
           ? setupConfigTimeout
           : timeout;
+      if (method == 'serviceCheck') {
+        // Service rules can make several requests and retry timeouts. Match
+        // the core's six-request sweep budget, plus transport overhead.
+        final millis = arguments is Map ? arguments['timeout'] : null;
+        final budget = Duration(
+          milliseconds:
+              (millis is int && millis > 0 ? millis : 10000) * 6 + 5000,
+        );
+        if (budget > requestTimeout) requestTimeout = budget;
+      }
       return await reply.future.timeout(
         requestTimeout,
         onTimeout: () =>

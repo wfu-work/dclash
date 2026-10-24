@@ -25,6 +25,7 @@ class ProxiesView extends GetView<ProxiesController> {
     title: 'featureProxies'.tr,
     subtitle: 'proxySubtitle'.tr,
     scroll: false,
+    actionsInlineOnCompact: true,
     actions: [
       Obx(() {
         final testing = controller.testingAll.value;
@@ -37,8 +38,11 @@ class ProxiesView extends GetView<ProxiesController> {
                 }
                 await controller.testAll();
               });
+        // On phones this stays a small title-bar action. A labeled button
+        // beneath the subtitle leaves an awkward empty action row and competes
+        // with the proxy-group controls below.
         final compact =
-            MediaQuery.sizeOf(context).width < 400 ||
+            MediaQuery.sizeOf(context).width < 600 ||
             MediaQuery.textScalerOf(context).scale(14) > 19;
         final icon = testing
             ? const SizedBox(
@@ -50,9 +54,18 @@ class ProxiesView extends GetView<ProxiesController> {
         return compact
             ? Tooltip(
                 message: running ? 'proxyTestAll'.tr : 'featureStartCore'.tr,
-                child: IconButton.filledTonal(onPressed: onPressed, icon: icon),
+                child: IconButton(
+                  key: const ValueKey('proxyTestAllAction'),
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(40, 40),
+                    backgroundColor: Colors.transparent,
+                  ),
+                  onPressed: onPressed,
+                  icon: icon,
+                ),
               )
             : FilledButton.tonalIcon(
+                key: const ValueKey('proxyTestAllAction'),
                 onPressed: onPressed,
                 icon: icon,
                 label: Text(
@@ -67,43 +80,6 @@ class ProxiesView extends GetView<ProxiesController> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _modeBar(context),
-        const SizedBox(height: 12),
-        Obx(() {
-          final searchOpen = controller.searchOpen.value;
-          return LayoutBuilder(
-            builder: (context, constraints) {
-              final search = searchOpen
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: AppSearchField(
-                            onChanged: (value) =>
-                                controller.query.value = value,
-                            hint: 'proxySearch'.tr,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          tooltip: 'close'.tr,
-                          onPressed: controller.toggleSearch,
-                          icon: const AppIcon(AppIcons.close, size: 19),
-                        ),
-                      ],
-                    )
-                  : Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton.filledTonal(
-                        tooltip: 'proxySearchOpen'.tr,
-                        onPressed: controller.toggleSearch,
-                        icon: const AppIcon(AppIcons.search, size: 19),
-                      ),
-                    );
-              return constraints.maxWidth < 560
-                  ? search
-                  : Row(children: [Expanded(child: search)]);
-            },
-          );
-        }),
         const SizedBox(height: 12),
         Expanded(
           child: Obx(() {
@@ -335,34 +311,38 @@ class ProxiesView extends GetView<ProxiesController> {
                     color: colors.onSurfaceVariant,
                   ),
                 );
-          final heading = constraints.maxWidth < 600
+          final controls = Wrap(
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (selected != null)
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth >= 840 ? 240 : 120,
+                  ),
+                  child: selected,
+                ),
+              _groupToolbar(context, group),
+            ],
+          );
+          final heading =
+              constraints.maxWidth < 600 ||
+                  MediaQuery.textScalerOf(context).scale(14) > 19
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     compactIdentity,
-                    if (selected != null) ...[
-                      const SizedBox(height: 5),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 26),
-                        child: selected,
-                      ),
-                    ],
                     const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _groupToolbar(context, group),
-                    ),
+                    Align(alignment: Alignment.centerRight, child: controls),
                   ],
                 )
               : Row(
                   children: [
                     Expanded(child: identity),
-                    if (selected != null) ...[
-                      const SizedBox(width: 12),
-                      Flexible(child: selected),
-                    ],
                     const SizedBox(width: 12),
-                    _groupToolbar(context, group),
+                    controls,
                   ],
                 );
           return heading;
@@ -377,6 +357,7 @@ class ProxiesView extends GetView<ProxiesController> {
     final hideUnavailable = controller.hideUnavailable;
     final grid = controller.grid.value;
     return Wrap(
+      alignment: WrapAlignment.end,
       spacing: 2,
       children: [
         IconButton(
@@ -420,12 +401,6 @@ class ProxiesView extends GetView<ProxiesController> {
           ),
           icon: const AppIcon(AppIcons.filterOff, size: 19),
           selectedIcon: const AppIcon(AppIcons.filter, size: 19),
-        ),
-        IconButton(
-          tooltip: 'proxySearchOpen'.tr,
-          isSelected: controller.searchOpen.value,
-          onPressed: controller.toggleSearch,
-          icon: const AppIcon(AppIcons.search, size: 19),
         ),
         IconButton(
           tooltip: grid ? 'proxyList'.tr : 'proxyGrid'.tr,
@@ -488,11 +463,7 @@ class ProxiesView extends GetView<ProxiesController> {
                     1,
                     5,
                   ),
-                  mainAxisExtent:
-                      100 +
-                      (MediaQuery.textScalerOf(context).scale(14) / 14 - 1)
-                              .clamp(0, 2) *
-                          60,
+                  mainAxisExtent: ProxyNodeTile.gridMainAxisExtent(context),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),

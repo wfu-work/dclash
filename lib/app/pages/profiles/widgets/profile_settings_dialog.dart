@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../../../../domains/clash_profile.dart';
 import '../../../../domains/script_library.dart';
 import '../../../../domains/standard_extension.dart';
+import '../../../widgets/app_switch.dart';
 
 class ProfileSettingsDialog extends StatefulWidget {
   const ProfileSettingsDialog({
@@ -122,12 +123,18 @@ class _ProfileSettingsDialogState extends State<ProfileSettingsDialog> {
                 ),
               ),
               const SizedBox(height: 6),
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                value: _followEnabled,
-                onChanged: (value) => setState(() => _followEnabled = value),
-                title: Text('scriptSelectionFollow'.tr),
-                subtitle: Text('scriptSelectionFollowHelp'.tr),
+              MergeSemantics(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('scriptSelectionFollow'.tr),
+                  subtitle: Text('scriptSelectionFollowHelp'.tr),
+                  trailing: AppSwitch(
+                    value: _followEnabled,
+                    onChanged: (value) =>
+                        setState(() => _followEnabled = value),
+                  ),
+                  onTap: () => setState(() => _followEnabled = !_followEnabled),
+                ),
               ),
               if (widget.scripts.isEmpty)
                 Align(

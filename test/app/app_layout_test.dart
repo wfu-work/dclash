@@ -2,15 +2,19 @@ import 'dart:async';
 
 import 'package:dclash_flutter/app/cloudrift_app.dart';
 import 'package:dclash_flutter/app/pages/dashboard/dashboard_layout_view.dart';
+import 'package:dclash_flutter/app/pages/settings/about_view.dart';
 import 'package:dclash_flutter/app/pages/settings/appearance_view.dart';
 import 'package:dclash_flutter/app/pages/settings/backup_view.dart';
+import 'package:dclash_flutter/app/pages/settings/licenses_view.dart';
 import 'package:dclash_flutter/app/pages/settings/settings_view.dart';
 import 'package:dclash_flutter/app/pages/workspace/workspace_controller.dart';
 import 'package:dclash_flutter/app/widgets/app_dialogs.dart';
 import 'package:dclash_flutter/app/widgets/app_navigation_item.dart';
 import 'package:dclash_flutter/app/widgets/app_system_ui.dart';
+import 'package:dclash_flutter/app/widgets/app_workspace_surface.dart';
 import 'package:dclash_flutter/app/widgets/connect_button.dart';
 import 'package:dclash_flutter/configs/localization/app_translations.dart';
+import 'package:dclash_flutter/domains/clash_connection.dart';
 import 'package:dclash_flutter/domains/clash_profile.dart';
 import 'package:dclash_flutter/domains/core_status.dart';
 import 'package:dclash_flutter/domains/proxy_group.dart';
@@ -19,10 +23,12 @@ import 'package:dclash_flutter/services/backup_service.dart';
 import 'package:dclash_flutter/services/core_service.dart';
 import 'package:dclash_flutter/services/profile_service.dart';
 import 'package:dclash_flutter/services/settings_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class _Backup extends BackupService {
   _Backup(super.profiles, super.settings);
@@ -39,6 +45,13 @@ class _Backup extends BackupService {
 void main() {
   setUp(() async {
     Get.testMode = true;
+    PackageInfo.setMockInitialValues(
+      appName: 'dclash',
+      packageName: 'test.dclash',
+      version: '2.3.4',
+      buildNumber: '42',
+      buildSignature: '',
+    );
     final settings = SettingsService(memoryOnly: true);
     await settings.initialize();
     await settings.set('locale', 'en_US');
@@ -56,6 +69,26 @@ void main() {
       translations['zh_CN']!.keys.toSet(),
       translations['en_US']!.keys.toSet(),
     );
+  });
+
+  testWidgets('desktop workspace uses the bright primary content canvas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1240, 850));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const CloudriftApp());
+    await tester.pumpAndSettle();
+
+    final surface = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(AppWorkspaceSurface),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(surface.color, Colors.white);
+    expect(tester.takeException(), isNull);
   });
 
   for (final size in [const Size(390, 844), const Size(1240, 850)]) {
@@ -83,6 +116,8 @@ void main() {
             const SettingsView(),
             const AppearanceView(),
             const BackupView(),
+            const AboutView(),
+            const LicensesView(),
             const DashboardLayoutView(),
           ]) {
             unawaitedNavigatorPush(tester, page);
@@ -148,7 +183,7 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('mobile workspace exposes settings in the bottom navigation', (
+  testWidgets('mobile workspace has four tabs and opens settings from header', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -156,11 +191,94 @@ void main() {
     await tester.pumpWidget(const CloudriftApp());
     await tester.pumpAndSettle();
 
-    final settingsItem = find.bySemanticsLabel('Settings');
-    expect(settingsItem, findsOneWidget);
-    await tester.tap(settingsItem);
+    final dockItems = find.byWidgetPredicate(
+      (widget) => widget is AppNavigationItem && widget.vertical,
+    );
+    expect(dockItems, findsNWidgets(4));
+    expect(
+      tester.widgetList<AppNavigationItem>(dockItems).map((item) => item.label),
+      ['Home', 'Proxies', 'Profiles', 'Tools'],
+    );
+    await tester.tap(find.byKey(const ValueKey('dashboardSettingsAction')));
     await tester.pumpAndSettle();
     expect(find.byType(SettingsView), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('mobile dashboard aligns header actions and status controls', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final profiles = Get.find<ProfileService>();
+    profiles.profiles.add(
+      const ClashProfile(
+        id: 'mobile-layout',
+        name: 'Mobile layout',
+        source: ProfileSource.custom,
+        path: 'mobile-layout.yaml',
+      ),
+    );
+    profiles.activeId.value = 'mobile-layout';
+    Get.find<CoreService>().status.value = CoreStatus.running;
+    await tester.pumpWidget(const CloudriftApp());
+    await tester.pumpAndSettle();
+
+    final title = tester.getRect(find.text('Dashboard').first);
+    final layoutAction = tester.getRect(
+      find.byKey(const ValueKey('dashboardLayoutAction')),
+    );
+    final settingsAction = tester.getRect(
+      find.byKey(const ValueKey('dashboardSettingsAction')),
+    );
+    expect(layoutAction.left, greaterThan(title.right));
+    expect(settingsAction.left, greaterThan(layoutAction.right));
+    expect((layoutAction.center.dy - title.center.dy).abs(), lessThan(14));
+    expect(settingsAction.right, lessThanOrEqualTo(374));
+
+    final statusCard = tester.getRect(
+      find.byKey(const ValueKey('dashboardStatusCard')),
+    );
+    final controls = tester.getRect(
+      find.byKey(const ValueKey('dashboardStatusControls')),
+    );
+    final connect = tester.getRect(find.byType(ConnectButton));
+    expect(controls.bottom, closeTo(statusCard.bottom - 18, 1));
+    expect(connect.right, lessThanOrEqualTo(statusCard.right - 17));
+    expect(connect.center.dy, closeTo(controls.center.dy, 1));
+    expect(connect.width, 68);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('narrow dashboard stacks the status controls before overflow', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 768));
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(() {
+      tester.binding.setSurfaceSize(null);
+      tester.platformDispatcher.clearTextScaleFactorTestValue();
+    });
+    final profiles = Get.find<ProfileService>();
+    profiles.profiles.add(
+      const ClashProfile(
+        id: 'narrow-layout',
+        name: 'Narrow layout',
+        source: ProfileSource.custom,
+        path: 'narrow-layout.yaml',
+      ),
+    );
+    profiles.activeId.value = 'narrow-layout';
+    Get.find<CoreService>().status.value = CoreStatus.running;
+    await tester.pumpWidget(const CloudriftApp());
+    await tester.pumpAndSettle();
+
+    final controls = tester.getRect(
+      find.byKey(const ValueKey('dashboardStatusControls')),
+    );
+    final connect = tester.getRect(find.byType(ConnectButton));
+    expect(connect.top, greaterThan(controls.top));
+    expect(connect.right, lessThanOrEqualTo(controls.right));
     expect(tester.takeException(), isNull);
   });
 
@@ -175,7 +293,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Connection'), findsOneWidget);
-    expect(find.text('System'), findsOneWidget);
+    expect(find.byKey(const ValueKey('settingsMenu:general')), findsOneWidget);
     expect(find.text('General'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.text('Appearance').first);
@@ -186,9 +304,111 @@ void main() {
 
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpAndSettle();
-    expect(find.text('Connection'), findsNothing);
+    expect(find.text('Connection'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'embedded about uses the settings back control and live versions',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1240, 850));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(const CloudriftApp());
+      await tester.pumpAndSettle();
+      unawaitedNavigatorPush(tester, const SettingsView(section: 'about'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AboutView), findsOneWidget);
+      expect(find.byTooltip('Back'), findsOneWidget);
+      expect(find.text('2.3.4'), findsOneWidget);
+      expect(find.text('42'), findsOneWidget);
+      expect(find.text('Reference source'), findsNothing);
+      Get.find<CoreService>().version.value = 'mihomo test';
+      await tester.pumpAndSettle();
+      expect(find.text('mihomo test'), findsOneWidget);
+
+      final aboutMenu = find.byKey(const ValueKey('settingsMenu:about'));
+      final licensesMenu = find.byKey(const ValueKey('settingsMenu:licenses'));
+      await tester.scrollUntilVisible(
+        licensesMenu,
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byType(SettingsView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+      final groupHeading = find.text('About').first;
+      expect(
+        tester.getTopLeft(groupHeading).dy,
+        lessThan(tester.getTopLeft(aboutMenu).dy),
+      );
+      expect(
+        tester.getTopLeft(aboutMenu).dy,
+        lessThan(tester.getTopLeft(licensesMenu).dy),
+      );
+      await tester.tap(licensesMenu);
+      await tester.pumpAndSettle();
+      expect(find.byType(LicensesView), findsOneWidget);
+      expect(find.byType(AboutView), findsNothing);
+      expect(find.byTooltip('Back'), findsOneWidget);
+      await tester.tap(aboutMenu);
+      await tester.pumpAndSettle();
+      expect(find.byType(AboutView), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsView), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('mobile about and licenses use back navigation', (tester) async {
+    LicenseRegistry.reset();
+    addTearDown(LicenseRegistry.reset);
+    LicenseRegistry.addLicense(() async* {
+      yield LicenseEntryWithLineBreaks(['Example component'], 'First license');
+      yield LicenseEntryWithLineBreaks(['Example component'], 'Second license');
+    });
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const CloudriftApp());
+    await tester.pumpAndSettle();
+    unawaitedNavigatorPush(tester, const SettingsView());
+    await tester.pumpAndSettle();
+    final about = find.byKey(const ValueKey('settingsMenu:about'));
+    await tester.ensureVisible(about);
+    await tester.tap(about);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AboutView), findsOneWidget);
+    expect(find.byType(AboutDialog), findsNothing);
+    expect(find.byTooltip('Back'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AboutView), findsNothing);
+    final licenses = find.byKey(const ValueKey('settingsMenu:licenses'));
+    await tester.ensureVisible(licenses);
+    await tester.tap(licenses);
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensesView), findsOneWidget);
+    expect(find.byTooltip('Back'), findsOneWidget);
+    expect(find.text('Example component'), findsOneWidget);
+    await tester.tap(find.text('Example component'));
+    await tester.pumpAndSettle();
+    expect(find.text('First license'), findsOneWidget);
+    expect(find.text('Second license'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensesView), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LicensesView), findsNothing);
+    expect(find.byType(SettingsView), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('narrow navigation and settings support enlarged text', (
@@ -228,6 +448,27 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ConnectButton), findsOneWidget);
     final core = Get.find<CoreService>();
+    core
+      ..status.value = CoreStatus.running
+      ..memory.value = 18 * 1024 * 1024
+      ..version.value = 'mihomo test';
+    core.connections.add(
+      ClashConnection(
+        id: 'runtime-connection',
+        host: 'runtime.example',
+        network: 'tcp',
+        source: '127.0.0.1:7890',
+        destination: '203.0.113.1:443',
+        rule: 'MATCH',
+        chains: const ['DIRECT'],
+        upload: 0,
+        download: 0,
+        startedAt: DateTime(2026, 10, 23),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('18.0 MB'), findsOneWidget);
+    expect(find.text('mihomo test'), findsOneWidget);
     core.error.value = 'DClashCore is missing';
     await tester.pump();
     expect(find.text('Why the connection failed'), findsOneWidget);
@@ -237,6 +478,18 @@ void main() {
     expect(find.text('Outbound mode'), findsOneWidget);
     expect(find.text('Allow LAN'), findsOneWidget);
     expect(find.text('Mixed proxy port'), findsOneWidget);
+    expect(find.text('Runtime resources'), findsOneWidget);
+    expect(find.text('Active connections'), findsOneWidget);
+    final detailsAction = find.byKey(
+      const ValueKey('dashboardProfileDetailsAction'),
+    );
+    await tester.ensureVisible(detailsAction);
+    await tester.tap(detailsAction);
+    await tester.pumpAndSettle();
+    expect(find.text('Profile type'), findsOneWidget);
+    expect(find.text('Last updated'), findsNWidgets(2));
+    expect(find.text('Every 24 h'), findsOneWidget);
+    expect(find.text('2027-01-01'), findsNWidgets(2));
     for (var i = 0; i < 4; i++) {
       Get.find<WorkspaceController>().select(i);
       await tester.pumpAndSettle();
@@ -247,6 +500,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     Navigator.of(tester.element(find.byType(SettingsView))).pop();
+    await tester.pumpAndSettle();
+    unawaitedNavigatorPush(tester, const AboutView());
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find
+          .descendant(
+            of: find.byType(AboutView),
+            matching: find.byType(SelectableText),
+          )
+          .last,
+    );
+    expect(tester.takeException(), isNull);
+    Navigator.of(tester.element(find.byType(AboutView))).pop();
+    await tester.pumpAndSettle();
+    unawaitedNavigatorPush(tester, const LicensesView());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    Navigator.of(tester.element(find.byType(LicensesView))).pop();
     await tester.pumpAndSettle();
     await tester.binding.setSurfaceSize(const Size(1240, 850));
     Get.find<WorkspaceController>().select(2);

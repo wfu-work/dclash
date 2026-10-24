@@ -2,16 +2,22 @@ import 'dart:io';
 
 import 'proxy_command.dart';
 
+typedef ProxyEndpointChecker = Future<bool> Function(String host, int port);
+
 class MacosProxy {
   final ProxyCommandRunner _commandRunner;
+  final ProxyEndpointChecker _endpointInUse;
   Map<String, _ServiceSnapshot>? _saved;
 
-  MacosProxy({required ProxyCommandRunner commandRunner})
-    : _commandRunner = commandRunner;
+  MacosProxy({
+    required ProxyCommandRunner commandRunner,
+    ProxyEndpointChecker? endpointInUse,
+  }) : _commandRunner = commandRunner,
+       _endpointInUse = endpointInUse ?? _isEndpointInUse;
 
   Future<bool> start(int port, List<String> bypassDomain) async {
     final services = await _networkServices();
-    if (services.isEmpty) return false;
+    if (services == null || services.isEmpty) return false;
     final saved = {...?_saved};
     for (final service in services) {
       if (saved.containsKey(service)) continue;
@@ -40,6 +46,77 @@ class MacosProxy {
     }
     if (restored) _saved = null;
     return restored;
+  }
+
+  /// Repairs an abandoned local proxy even when its in-memory snapshot was
+  /// lost on a previous run. A live listener may belong to another client.
+  /// Only the app's port is eligible; PAC, bypasses and other proxies stay intact.
+  Future<bool> recoverStale(int port) async {
+    if (port < 1 || port > 65535) return false;
+    final services = await _networkServices();
+    if (services == null) return false;
+    var succeeded = true;
+    for (final service in services) {
+      for (final kind in const ['web', 'secureweb', 'socksfirewall']) {
+        final current = await _readProxy(service, kind);
+        if (current == null) {
+          succeeded = false;
+          continue;
+        }
+        if (!current.isLocalEndpoint(port) ||
+            await _endpointInUse(current.server, port)) {
+          continue;
+        }
+        if (!await _commandRunner.run([
+          ProxyCommand('/usr/sbin/networksetup', [
+            '-set${kind}proxystate',
+            service,
+            'off',
+          ]),
+        ])) {
+          succeeded = false;
+          continue;
+        }
+        // networksetup can print an error while exiting successfully.
+        final restored = await _readProxy(service, kind);
+        if (restored == null || restored.isLocalEndpoint(port)) {
+          succeeded = false;
+        }
+      }
+    }
+    return succeeded;
+  }
+
+  Future<_ProxySnapshot?> _readProxy(String service, String kind) async {
+    try {
+      final result = await _commandRunner.process('/usr/sbin/networksetup', [
+        '-get${kind}proxy',
+        service,
+      ]);
+      if (result.exitCode != 0) return null;
+      return _ProxySnapshot.parse(
+        result.stdout.toString(),
+        requireUnauthenticated: false,
+      );
+    } on ProcessException {
+      return null;
+    }
+  }
+
+  static Future<bool> _isEndpointInUse(String host, int port) async {
+    try {
+      final socket = await Socket.connect(
+        host == '[::1]' ? '::1' : host,
+        port,
+        timeout: const Duration(milliseconds: 500),
+      );
+      socket.destroy();
+      return true;
+    } on SocketException catch (error) {
+      // Only connection refused proves there is no local listener. Timeouts
+      // and other probe errors must not disable a potentially working proxy.
+      return error.osError?.errorCode != 61;
+    }
   }
 
   Future<_ServiceSnapshot?> _snapshot(String service) async {
@@ -72,17 +149,17 @@ class MacosProxy {
     }
   }
 
-  Future<List<String>> _networkServices() async {
+  Future<List<String>?> _networkServices() async {
     try {
       final result = await _commandRunner.process('/usr/sbin/networksetup', [
         '-listallnetworkservices',
       ]);
       if (result.exitCode != 0) {
-        return [];
+        return null;
       }
       return MacosProxyCommands.parseNetworkServices(result.stdout.toString());
     } on ProcessException {
-      return [];
+      return null;
     }
   }
 }
@@ -139,7 +216,20 @@ class _ProxySnapshot {
   final String server;
   final int port;
 
-  static _ProxySnapshot? parse(String text) {
+  bool isLocalEndpoint(int expectedPort) =>
+      enabled &&
+      port == expectedPort &&
+      const {
+        '127.0.0.1',
+        'localhost',
+        '::1',
+        '[::1]',
+      }.contains(server.toLowerCase());
+
+  static _ProxySnapshot? parse(
+    String text, {
+    bool requireUnauthenticated = true,
+  }) {
     final values = <String, String>{};
     for (final line in text.split('\n')) {
       final separator = line.indexOf(':');
@@ -153,7 +243,8 @@ class _ProxySnapshot {
     if ((enabled != 'Yes' && enabled != 'No') ||
         port == null ||
         !values.containsKey('Server') ||
-        values['Authenticated Proxy Enabled'] != '0') {
+        (requireUnauthenticated &&
+            values['Authenticated Proxy Enabled'] != '0')) {
       return null;
     }
     // networksetup cannot retrieve saved credentials, so authenticated

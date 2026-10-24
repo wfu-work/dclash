@@ -36,11 +36,200 @@ class _Preferences implements SharedPreferences {
 }
 
 void main() {
+  test(
+    'new preferences reject invalid values and equivalent shortcuts',
+    () async {
+      final settings = SettingsService(memoryOnly: true);
+      await settings.initialize();
+      for (final entry in <String, dynamic>{
+        'historyRetentionDays': 0,
+        'pollIntervalSeconds': 0,
+        'backgroundIntervalSeconds': 1,
+        'windowWidth': 100,
+        'windowHeight': 9000,
+        'autoCheckUpdates': 'true',
+        'shortcutWindow': 'ctrl+ctrl+w',
+        'shortcutConnection': 'alt+ctrl+w',
+      }.entries) {
+        await expectLater(
+          settings.set(entry.key, entry.value),
+          throwsFormatException,
+        );
+        expect(settings.fields[entry.key], SettingsService.defaults[entry.key]);
+      }
+    },
+  );
+
+  test(
+    'window dimensions are persisted together or both stay unchanged',
+    () async {
+      final preferences = _Preferences();
+      final settings = SettingsService(preferences: preferences);
+      await settings.initialize();
+      preferences.failNext = true;
+      await expectLater(
+        settings.setAll({'windowWidth': 1000, 'windowHeight': 700}),
+        throwsStateError,
+      );
+      expect(settings.fields['windowWidth'], 1240);
+      expect(settings.fields['windowHeight'], 850);
+      await settings.setAll({'windowWidth': 1000, 'windowHeight': 700});
+      expect(jsonDecode(preferences.stored!)['windowWidth'], 1000);
+      expect(jsonDecode(preferences.stored!)['windowHeight'], 700);
+    },
+  );
+
   test('connections default to automatic startup', () async {
     final settings = SettingsService(memoryOnly: true);
     await settings.initialize();
     expect(settings.fields['autoStart'], true);
   });
+
+  test('dashboard layout migration adds runtime resources only once', () async {
+    final preferences = _Preferences()
+      ..stored = jsonEncode(
+        {
+          ...SettingsService.defaults,
+          'dashboardCards': ['status', 'currentOutbound', 'connections'],
+        }..remove('dashboardLayoutVersion'),
+      );
+    final settings = SettingsService(preferences: preferences);
+    await settings.initialize();
+    expect(settings.fields['dashboardCards'], [
+      'status',
+      'currentOutbound',
+      'runtimeResources',
+      'connections',
+    ]);
+    await settings.set('dashboardCards', ['status']);
+    final restored = SettingsService(preferences: preferences);
+    await restored.initialize();
+    expect(restored.fields['dashboardCards'], ['status']);
+
+    await restored.restore({
+      'dashboardCards': ['status', 'currentOutbound', 'connections'],
+    });
+    expect(restored.fields['dashboardCards'], [
+      'status',
+      'currentOutbound',
+      'runtimeResources',
+      'connections',
+    ]);
+  });
+
+  test(
+    'dashboard overview upgrades old defaults and preserves custom layouts',
+    () async {
+      const oldV1Default = [
+        'status',
+        'outboundMode',
+        'currentProfile',
+        'currentOutbound',
+        'runtimeResources',
+        'proxyGroups',
+        'connections',
+        'serviceStatus',
+      ];
+      const oldV2Default = [
+        'status',
+        'outboundMode',
+        'runtimeResources',
+        'currentProfile',
+        'currentOutbound',
+        'proxyGroups',
+        'connections',
+        'serviceStatus',
+      ];
+      for (final version in [null, 1]) {
+        final preferences = _Preferences()
+          ..stored = jsonEncode({
+            'dashboardCards': oldV1Default,
+            'dashboardLayoutVersion': ?version,
+          });
+        final settings = SettingsService(preferences: preferences);
+        await settings.initialize();
+        expect(
+          settings.fields['dashboardCards'],
+          SettingsService.defaults['dashboardCards'],
+        );
+        expect(settings.fields['dashboardLayoutVersion'], 3);
+        await settings.set('ipv6', true);
+        final restored = SettingsService(preferences: preferences);
+        await restored.initialize();
+        expect(
+          restored.fields['dashboardCards'],
+          SettingsService.defaults['dashboardCards'],
+        );
+      }
+      final v2Preferences = _Preferences()
+        ..stored = jsonEncode({
+          'dashboardCards': oldV2Default,
+          'dashboardLayoutVersion': 2,
+        });
+      final v2Settings = SettingsService(preferences: v2Preferences);
+      await v2Settings.initialize();
+      expect(
+        v2Settings.fields['dashboardCards'],
+        SettingsService.defaults['dashboardCards'],
+      );
+      expect(v2Settings.fields['dashboardLayoutVersion'], 3);
+
+      final settings = SettingsService(memoryOnly: true);
+      await settings.initialize();
+      for (final version in [1, 2, 3]) {
+        for (final layout in [
+          ['currentOutbound', 'status', 'currentProfile', 'connections'],
+          ['connections', 'runtimeResources', 'status', 'proxyGroups'],
+        ]) {
+          await settings.restore({
+            'dashboardLayoutVersion': version,
+            'dashboardCards': layout,
+          });
+          expect(settings.fields['dashboardCards'], layout);
+          expect(settings.fields['dashboardLayoutVersion'], 3);
+          final exported = settings.export();
+          await settings.restore(exported);
+          expect(settings.fields['dashboardCards'], layout);
+        }
+      }
+      await settings.restore({
+        'dashboardLayoutVersion': 2,
+        'dashboardCards': oldV1Default,
+      });
+      expect(settings.fields['dashboardCards'], oldV1Default);
+      await settings.restore({
+        'dashboardLayoutVersion': 3,
+        'dashboardCards': oldV2Default,
+      });
+      expect(settings.fields['dashboardCards'], oldV2Default);
+    },
+  );
+
+  test(
+    'version three layouts are not rewritten during initialization',
+    () async {
+      const custom = [
+        'recentEvents',
+        'status',
+        'healthSummary',
+        'todayTraffic',
+      ];
+      final preferences = _Preferences()
+        ..stored = jsonEncode({
+          ...SettingsService.defaults,
+          'dashboardLayoutVersion': 3,
+          'dashboardCards': custom,
+        });
+      final settings = SettingsService(preferences: preferences);
+      await settings.initialize();
+      expect(settings.fields['dashboardCards'], custom);
+      expect(settings.fields['dashboardLayoutVersion'], 3);
+      final reopened = SettingsService(preferences: preferences);
+      await reopened.initialize();
+      expect(reopened.fields['dashboardCards'], custom);
+      expect(reopened.fields['dashboardLayoutVersion'], 3);
+    },
+  );
 
   test('a pending restore wins over an older remote script refresh', () async {
     final preferences = _Preferences();

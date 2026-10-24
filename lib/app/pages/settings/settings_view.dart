@@ -8,19 +8,32 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../configs/theme/app_theme.dart';
 import '../../../domains/core_status.dart';
 import '../../../services/config_builder.dart';
+import '../../../services/desktop_integration_service.dart';
+import '../../../services/desktop_shortcut_service.dart';
+import '../../../services/health_history_service.dart';
+import '../../../services/network_timeline_service.dart';
+import '../../../services/node_quality_service.dart';
+import '../../../services/profile_notification_service.dart';
+import '../../../services/traffic_statistics_service.dart';
+import '../../../services/update_service.dart';
+import '../dashboard/dashboard_layout_view.dart';
 import '../../widgets/app_widgets.dart';
 import '../../widgets/app_workspace_surface.dart';
 import 'access/installed_apps_controller.dart';
 import 'access/installed_apps_view.dart';
+import 'about_view.dart';
 import 'appearance_view.dart';
 import 'backup_view.dart';
 import 'config_editor/config_schema.dart';
 import 'config_editor_view.dart';
 import 'helper_management_rows.dart';
+import 'licenses_view.dart';
 import 'settings_controller.dart';
 import 'settings_navigation.dart';
 import 'settings_sidebar.dart';
 import 'structured_config_editor_view.dart';
+
+part 'settings_features.dart';
 
 class SettingsView extends StatefulWidget {
   const SettingsView({super.key, this.section});
@@ -32,6 +45,10 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   late SettingsSection _selected;
+  bool _maintenanceBusy = false;
+
+  void _setMaintenanceBusy(bool value) =>
+      setState(() => _maintenanceBusy = value);
 
   SettingsController get controller => Get.find<SettingsController>();
 
@@ -59,36 +76,34 @@ class _SettingsViewState extends State<SettingsView> {
   );
 
   Widget _mobile(BuildContext context) {
-    if (widget.section == 'appearance') return const AppearanceView();
-    if (widget.section == 'backup') return const BackupView();
+    if (widget.section != null) return _content(context, _selected);
     return Scaffold(
       body: SafeArea(
         child: AppPage(
           maxContentWidth: 820,
-          title: (widget.section ?? 'settings').tr,
-          actions: [
-            IconButton(
-              tooltip: 'back'.tr,
-              onPressed: () => Navigator.pop(context),
-              icon: const AppIcon(AppIcons.close),
-            ),
-          ],
-          child: Obx(
-            () => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (widget.section == null || widget.section == 'general')
-                  _general(context),
-                if (widget.section == null || widget.section == 'network')
-                  _network(context),
-                if (Platform.isAndroid &&
-                    (widget.section == null || widget.section == 'network'))
-                  _access(context),
-                if (widget.section == null || widget.section == 'advanced')
-                  _advanced(context),
-                if (widget.section == null) _appPreferences(context),
-              ],
-            ),
+          title: 'settings'.tr,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final group in SettingsNavigation.visibleGroups)
+                AppSection(
+                  title: group.titleKey.tr,
+                  child: Column(
+                    children: [
+                      for (final section in group.sections)
+                        AppSettingsRow(
+                          key: ValueKey('settingsMenu:${section.key}'),
+                          title: section.titleKey.tr,
+                          icon: section.icon,
+                          onTap: () => _push(
+                            context,
+                            SettingsView(section: section.key),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -116,7 +131,7 @@ class _SettingsViewState extends State<SettingsView> {
           Expanded(
             child: AppWorkspaceSurface(
               desktop: true,
-              child: Obx(() => _desktopContent(context)),
+              child: _content(context, _selected, embedded: true),
             ),
           ),
         ],
@@ -124,90 +139,53 @@ class _SettingsViewState extends State<SettingsView> {
     );
   }
 
-  Widget _desktopContent(BuildContext context) => switch (_selected) {
-    SettingsSection.general => _desktopPage(
-      context,
-      _selected,
-      _general(context, showTitle: false),
-    ),
-    SettingsSection.network => _desktopPage(
-      context,
-      _selected,
-      _network(context, showTitle: false),
-    ),
-    SettingsSection.access => _desktopPage(
-      context,
-      _selected,
-      _access(context, showTitle: false),
-    ),
-    SettingsSection.advanced => _desktopPage(
-      context,
-      _selected,
-      _advanced(context, showTitle: false),
-    ),
-    SettingsSection.appearance => const AppearanceView(embedded: true),
-    SettingsSection.backup => const BackupView(embedded: true),
-    SettingsSection.about => _aboutPage(context),
-  };
-
-  Widget _desktopPage(
+  Widget _content(
     BuildContext context,
-    SettingsSection section,
-    Widget content,
-  ) =>
-      AppPage(maxContentWidth: 860, title: section.titleKey.tr, child: content);
-
-  Widget _appPreferences(BuildContext context) => AppSection(
-    title: 'appPreferences'.tr,
-    child: Column(
-      children: [
-        _route(context, 'appearance', AppIcons.palette, const AppearanceView()),
-        _route(context, 'backup', AppIcons.cloudSync, const BackupView()),
-        AppSettingsRow(
-          title: 'about'.tr,
-          icon: AppIcons.info,
-          onTap: () => showAbout(context),
-        ),
-      ],
-    ),
-  );
-
-  Widget _aboutPage(BuildContext context) => _desktopPage(
-    context,
-    SettingsSection.about,
-    AppCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
-            child: Text(
-              'aboutDescription'.tr,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          const Divider(height: 1),
-          AppSettingsRow(title: 'version'.tr, subtitle: '0.1.0'),
-          AppSettingsRow(
-            title: 'sourceCode'.tr,
-            icon: AppIcons.externalLink,
-            onTap: () async {
-              await launchUrl(
-                Uri.parse('https://github.com/chen08209/FlClash'),
-                mode: LaunchMode.externalApplication,
-              );
-            },
-          ),
-          AppSettingsRow(
-            title: 'licenses'.tr,
-            icon: AppIcons.info,
-            onTap: () => showAbout(context),
-          ),
-        ],
-      ),
-    ),
-  );
+    SettingsSection section, {
+    bool embedded = false,
+  }) {
+    switch (section) {
+      case SettingsSection.appearance:
+        return AppearanceView(embedded: embedded);
+      case SettingsSection.dashboard:
+        return DashboardLayoutView(embedded: embedded);
+      case SettingsSection.backup:
+        return BackupView(embedded: embedded);
+      case SettingsSection.about:
+        return AboutView(embedded: embedded);
+      case SettingsSection.licenses:
+        return LicensesView(embedded: embedded);
+      default:
+        break;
+    }
+    final page = AppPage(
+      maxContentWidth: 860,
+      title: section.titleKey.tr,
+      automaticallyImplyLeading: !embedded,
+      child: Obx(() {
+        // Also observes pending writes when a service is unavailable in preview.
+        final saving = controller.saving.value;
+        return AbsorbPointer(
+          absorbing: saving,
+          child: switch (section) {
+            SettingsSection.startup => _startup(context),
+            SettingsSection.shortcuts => _shortcuts(context),
+            SettingsSection.notifications => _notifications(context),
+            SettingsSection.general => _general(context, showTitle: false),
+            SettingsSection.network => _network(context, showTitle: false),
+            SettingsSection.advanced => _advanced(context, showTitle: false),
+            SettingsSection.access => _access(context, showTitle: false),
+            SettingsSection.kernel => _kernel(context),
+            SettingsSection.privacy => _privacy(context),
+            SettingsSection.performance => _performance(context),
+            SettingsSection.updates => _updates(context),
+            _ => const SizedBox.shrink(),
+          },
+        );
+      }),
+    );
+    return embedded ? page : Scaffold(body: SafeArea(child: page));
+  }
 
   Widget _section(
     String title, {
@@ -223,17 +201,18 @@ class _SettingsViewState extends State<SettingsView> {
     child: Column(
       children: [
         _input(context, 'mixedPort', number: true),
-        _choice(context, 'logLevel', [
-          'silent',
-          'error',
-          'warning',
-          'info',
-          'debug',
-        ]),
+        if (!Platform.isAndroid && !Platform.isIOS)
+          _switch(context, 'systemProxy'),
+        _switch(context, 'allowLan'),
+        AppSettingsRow(
+          title: 'bypassDomains'.tr,
+          subtitle: (controller.settings.fields['bypassDomains'] as List).join(
+            ', ',
+          ),
+          onTap: () => _editList(context, 'bypassDomains', 'bypassHint'),
+        ),
         _input(context, 'testUrl'),
         _input(context, 'testTimeout', number: true),
-        if (!Platform.isAndroid) _switch(context, 'launchAtLogin'),
-        if (!Platform.isAndroid) _switch(context, 'minimizeToTray'),
       ],
     ),
   );
@@ -243,31 +222,13 @@ class _SettingsViewState extends State<SettingsView> {
     showTitle: showTitle,
     child: Column(
       children: [
-        _switch(context, 'systemProxy'),
         _switch(context, 'tunEnabled', title: 'tun'),
-        _switch(context, 'allowLan'),
         _switch(context, 'ipv6'),
         _choice(context, 'stack', [
           'mixed',
           'system',
           'gvisor',
         ], title: 'tunStack'),
-        AppSettingsRow(
-          title: 'bypassDomains'.tr,
-          subtitle: (controller.settings.fields['bypassDomains'] as List).join(
-            ', ',
-          ),
-          onTap: () => _editList(context, 'bypassDomains', 'bypassHint'),
-        ),
-        _switch(context, 'controllerEnabled', subtitle: 'controllerHint'),
-        if (controller.settings.fields['controllerEnabled'] == true) ...[
-          _input(context, 'controllerPort', number: true),
-          AppSettingsRow(
-            title: 'controllerAccess'.tr,
-            icon: AppIcons.key,
-            onTap: () => _controllerAccess(context),
-          ),
-        ],
         _yaml(
           context,
           'dns',
@@ -280,11 +241,6 @@ class _SettingsViewState extends State<SettingsView> {
           'tunOverride',
           'mtu: 9000\nstrict-route: true\ndns-hijack:\n  - any:53',
         ),
-        if (Platform.isWindows || Platform.isLinux)
-          HelperManagementRows(
-            coreActive: _helperCoreActive,
-            onManage: (uninstall) => _manageHelper(context, uninstall),
-          ),
       ],
     ),
   );
@@ -294,6 +250,22 @@ class _SettingsViewState extends State<SettingsView> {
     showTitle: showTitle,
     child: Column(
       children: [
+        _choice(context, 'logLevel', [
+          'silent',
+          'error',
+          'warning',
+          'info',
+          'debug',
+        ]),
+        _switch(context, 'controllerEnabled', subtitle: 'controllerHint'),
+        if (controller.settings.fields['controllerEnabled'] == true) ...[
+          _input(context, 'controllerPort', number: true),
+          AppSettingsRow(
+            title: 'controllerAccess'.tr,
+            icon: AppIcons.key,
+            onTap: () => _controllerAccess(context),
+          ),
+        ],
         _switch(context, 'unifiedDelay'),
         _switch(context, 'tcpConcurrent'),
         _yaml(
@@ -450,17 +422,6 @@ class _SettingsViewState extends State<SettingsView> {
     ),
   );
 
-  Widget _route(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Widget page,
-  ) => AppSettingsRow(
-    title: title.tr,
-    icon: icon,
-    onTap: () => _push(context, page),
-  );
-
   void _push(BuildContext context, Widget page) =>
       Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 
@@ -570,28 +531,5 @@ class _SettingsViewState extends State<SettingsView> {
         (uninstall ? 'helperUninstalled' : 'helperInstalled').tr,
       );
     },
-  );
-
-  static void showAbout(BuildContext context) => showAboutDialog(
-    context: context,
-    applicationName: 'dclash',
-    applicationVersion: '0.1.0',
-    applicationIcon: const AppLogo(size: 48),
-    applicationLegalese: 'GPL-3.0 · Based on FlClash & mihomo',
-    children: [
-      const SizedBox(height: 16),
-      Text('aboutDescription'.tr),
-      const SizedBox(height: 12),
-      TextButton.icon(
-        onPressed: () async {
-          await launchUrl(
-            Uri.parse('https://github.com/chen08209/FlClash'),
-            mode: LaunchMode.externalApplication,
-          );
-        },
-        icon: const AppIcon(AppIcons.externalLink),
-        label: Text('sourceCode'.tr),
-      ),
-    ],
   );
 }
