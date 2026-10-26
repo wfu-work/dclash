@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services_bridge.dart';
 import '../../../services/core_service.dart';
 import '../../widgets/app_widgets.dart';
 
 class ProvidersView extends StatelessWidget {
-  const ProvidersView({super.key});
+  const ProvidersView({super.key, this.core});
+  final CoreService? core;
 
   @override
   Widget build(BuildContext context) {
-    final core = Get.find<CoreService>();
+    final core = this.core ?? coreFromGetX();
     return Scaffold(
       body: SafeArea(
         child: AppPage(

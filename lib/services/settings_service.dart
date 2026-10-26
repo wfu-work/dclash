@@ -62,8 +62,7 @@ class SettingsService extends GetxService {
     'proxyLayout': 'grid',
     'hideUnavailable': false,
     // Connections start automatically when an active profile is available.
-    // Kept as a storage field for backwards-compatible settings restores; the
-    // UI intentionally does not expose a switch for disabling this behavior.
+    // Users can disable this in Startup & Window settings.
     'autoStart': true,
     'launchAtLogin': false,
     'minimizeToTray': true,

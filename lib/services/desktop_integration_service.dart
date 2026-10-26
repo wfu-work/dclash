@@ -100,7 +100,7 @@ class DesktopIntegrationService extends GetxService with WindowListener {
     try {
       await _recoverSystemProxy();
     } on Object catch (error) {
-      core.error.value = error.toString();
+      core.recordError(error);
       _report(error);
     }
     try {

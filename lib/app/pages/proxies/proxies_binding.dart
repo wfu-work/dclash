@@ -1,18 +1,21 @@
 import 'package:get/get.dart';
 
-import '../../../services/core_service.dart';
-import '../../../services/settings_service.dart';
+import '../../../configs/app_services.dart';
 import 'proxies_controller.dart';
+import 'proxies_dependencies.dart';
 
 class ProxiesBinding extends Bindings {
+  ProxiesBinding([this.services]);
+  final AppServices? services;
+
   @override
   void dependencies() {
+    final dependencies = services == null
+        ? ProxiesDependencies.fromGetX()
+        : ProxiesDependencies.fromAppServices(services!);
     if (!Get.isRegistered<ProxiesController>()) {
       Get.lazyPut(
-        () => ProxiesController(
-          Get.find<CoreService>(),
-          Get.find<SettingsService>(),
-        ),
+        () => ProxiesController(dependencies.core, dependencies.settings),
       );
     }
   }

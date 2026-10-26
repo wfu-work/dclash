@@ -5,16 +5,17 @@ import '../../../services/settings_service.dart';
 import '../../widgets/app_widgets.dart';
 
 class DashboardLayoutView extends StatefulWidget {
-  const DashboardLayoutView({super.key, this.embedded = false});
+  const DashboardLayoutView({super.key, this.embedded = false, this.settings});
 
   final bool embedded;
+  final SettingsService? settings;
 
   @override
   State<DashboardLayoutView> createState() => _DashboardLayoutViewState();
 }
 
 class _DashboardLayoutViewState extends State<DashboardLayoutView> {
-  final _settings = Get.find<SettingsService>();
+  late final _settings = widget.settings ?? Get.find<SettingsService>();
   late final List<String> _cards;
   late final Set<String> _visible;
   bool _saving = false;

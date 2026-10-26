@@ -7,9 +7,10 @@ import '../../../services/settings_service.dart';
 import '../../../services/desktop_shortcut_service.dart';
 
 class SettingsController extends GetxController {
-  SettingsController(this.settings, this.core);
+  SettingsController(this.settings, this.core, {this.shortcuts});
   final SettingsService settings;
   final CoreService core;
+  final DesktopShortcutService? shortcuts;
   final saving = false.obs;
 
   Future<void> set(String key, dynamic value) async {
@@ -17,10 +18,11 @@ class SettingsController extends GetxController {
     saving.value = true;
     final previous = settings.fields[key];
     var startupChanged = false;
-    final shortcuts =
-        DesktopShortcutService.keys.contains(key) &&
-            Get.isRegistered<DesktopShortcutService>()
-        ? Get.find<DesktopShortcutService>()
+    final shortcuts = DesktopShortcutService.keys.contains(key)
+        ? this.shortcuts ??
+              (Get.isRegistered<DesktopShortcutService>()
+                  ? Get.find<DesktopShortcutService>()
+                  : null)
         : null;
     final previousSettings = settings.export();
     var shortcutsChanged = false;

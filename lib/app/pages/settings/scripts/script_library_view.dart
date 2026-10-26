@@ -8,7 +8,11 @@ import '../../../widgets/app_widgets.dart';
 import 'script_editor_dialog.dart';
 
 class ScriptLibraryView extends GetView<ScriptLibraryService> {
-  const ScriptLibraryView({super.key});
+  const ScriptLibraryView({super.key, this.service});
+  final ScriptLibraryService? service;
+
+  @override
+  ScriptLibraryService get controller => service ?? super.controller;
 
   @override
   Widget build(BuildContext context) => Obx(() {

@@ -4,18 +4,24 @@ import 'package:get/get.dart';
 
 import '../configs/localization/app_translations.dart';
 import '../configs/theme/app_theme.dart';
-import '../services/settings_service.dart';
+import '../configs/app_services.dart';
+import '../configs/app_services_bridge.dart';
 import 'routes/app_pages.dart';
 import 'routes/app_routes.dart';
 import 'widgets/app_system_ui.dart';
 import 'widgets/app_window_frame.dart';
 
 class CloudriftApp extends StatelessWidget {
-  const CloudriftApp({super.key});
+  const CloudriftApp({super.key, this.services});
+
+  /// Optional only for legacy tests and embedded callers. The production
+  /// entry point always supplies the composition-root dependencies.
+  final AppServices? services;
 
   @override
   Widget build(BuildContext context) => Obx(() {
-    final settings = Get.find<SettingsService>();
+    final dependencies = services ?? appServicesFromGetX();
+    final settings = dependencies.settings;
     final accent = settings.fields['accent'] as String? ?? 'blue';
     final pureBlack = settings.fields['pureBlack'] == true;
     final fontFamily = settings.fields['fontFamily'] as String? ?? 'system';
@@ -42,7 +48,7 @@ class CloudriftApp extends StatelessWidget {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       builder: (_, child) => AppWindowFrame(child: AppSystemUi(child: child!)),
       initialRoute: AppRoutes.workspace,
-      getPages: AppPages.pages,
+      getPages: AppPages.forServices(dependencies),
     );
   });
 }

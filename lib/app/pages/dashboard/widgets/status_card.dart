@@ -12,9 +12,20 @@ class StatusCard extends StatelessWidget {
     super.key,
     required this.controller,
     required this.compact,
+    this.onOpenProfiles,
   });
   final DashboardController controller;
   final bool compact;
+  final VoidCallback? onOpenProfiles;
+
+  void _openProfiles() {
+    final callback = onOpenProfiles;
+    if (callback != null) {
+      callback();
+    } else {
+      Get.find<WorkspaceController>().select(2);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => Obx(() {
@@ -36,7 +47,7 @@ class StatusCard extends StatelessWidget {
     final hasProfile = controller.profiles.active != null;
     final trailing = !hasProfile
         ? TextButton.icon(
-            onPressed: () => Get.find<WorkspaceController>().select(2),
+            onPressed: _openProfiles,
             icon: const AppIcon(AppIcons.addLink, size: 18),
             label: Text('browseProfiles'.tr),
           )
@@ -117,7 +128,14 @@ class StatusCard extends StatelessWidget {
       ),
       if (core.error.value case final message?) ...[
         const SizedBox(height: 12),
-        _errorPanel(context, message),
+        _errorPanel(
+          context,
+          message,
+          categoryKey: core.errorCategoryLabel,
+          recovering: core.recovering.value,
+          recoveryAttempt: core.recoveryAttempt.value,
+          recoveryExhausted: core.recoveryExhausted.value,
+        ),
       ],
       if (includeUptime) ...[const SizedBox(height: 22), _uptime(context)],
     ],
@@ -188,7 +206,14 @@ class StatusCard extends StatelessWidget {
     ],
   );
 
-  Widget _errorPanel(BuildContext context, String message) {
+  Widget _errorPanel(
+    BuildContext context,
+    String message, {
+    String? categoryKey,
+    bool recovering = false,
+    int recoveryAttempt = 0,
+    bool recoveryExhausted = false,
+  }) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
@@ -208,7 +233,7 @@ class StatusCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'connectionError'.tr,
+                  (categoryKey ?? 'connectionError').tr,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: colors.onErrorContainer,
                     fontWeight: FontWeight.w600,
@@ -222,6 +247,26 @@ class StatusCard extends StatelessWidget {
                     color: colors.onErrorContainer,
                   ),
                 ),
+                if (recovering) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'coreRecoveryAttempt'.trParams({
+                      'attempt': '$recoveryAttempt',
+                      'max': '3',
+                    }),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onErrorContainer,
+                    ),
+                  ),
+                ] else if (recoveryExhausted) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'coreRecoveryStopped'.tr,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.onErrorContainer,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

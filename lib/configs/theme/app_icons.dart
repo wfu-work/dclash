@@ -56,6 +56,7 @@ abstract final class AppIcons {
   static const sun = Icons.light_mode_outlined;
   static const link = Icons.link_rounded;
   static const memory = Icons.memory_rounded;
+  static const notifications = Icons.notifications_none_outlined;
   static const navigation = Icons.near_me_outlined;
   static const externalLink = Icons.open_in_new_rounded;
   static const palette = Icons.palette_outlined;

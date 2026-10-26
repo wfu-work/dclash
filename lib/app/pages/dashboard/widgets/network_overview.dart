@@ -163,7 +163,7 @@ class _DashboardNetworkOverviewState extends State<DashboardNetworkOverview> {
                       ),
                     ),
                   for (var i = 0; i < items.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
+                    if (i > 0) const SizedBox(height: 4),
                     items[i],
                   ],
                 ],

@@ -8,14 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../configs/theme/app_theme.dart';
 import '../../../domains/core_status.dart';
 import '../../../services/config_builder.dart';
-import '../../../services/desktop_integration_service.dart';
 import '../../../services/desktop_shortcut_service.dart';
-import '../../../services/health_history_service.dart';
-import '../../../services/network_timeline_service.dart';
-import '../../../services/node_quality_service.dart';
-import '../../../services/profile_notification_service.dart';
-import '../../../services/traffic_statistics_service.dart';
-import '../../../services/update_service.dart';
 import '../dashboard/dashboard_layout_view.dart';
 import '../../widgets/app_widgets.dart';
 import '../../widgets/app_workspace_surface.dart';
@@ -29,6 +22,7 @@ import 'config_editor_view.dart';
 import 'helper_management_rows.dart';
 import 'licenses_view.dart';
 import 'settings_controller.dart';
+import 'settings_dependencies.dart';
 import 'settings_navigation.dart';
 import 'settings_sidebar.dart';
 import 'structured_config_editor_view.dart';
@@ -36,8 +30,9 @@ import 'structured_config_editor_view.dart';
 part 'settings_features.dart';
 
 class SettingsView extends StatefulWidget {
-  const SettingsView({super.key, this.section});
+  const SettingsView({super.key, this.section, this.dependencies});
   final String? section;
+  final SettingsDependencies? dependencies;
 
   @override
   State<SettingsView> createState() => _SettingsViewState();
@@ -51,6 +46,8 @@ class _SettingsViewState extends State<SettingsView> {
       setState(() => _maintenanceBusy = value);
 
   SettingsController get controller => Get.find<SettingsController>();
+  SettingsDependencies get dependencies =>
+      widget.dependencies ?? SettingsDependencies.fromGetX();
 
   @override
   void initState() {
@@ -97,7 +94,10 @@ class _SettingsViewState extends State<SettingsView> {
                           icon: section.icon,
                           onTap: () => _push(
                             context,
-                            SettingsView(section: section.key),
+                            SettingsView(
+                              section: section.key,
+                              dependencies: dependencies,
+                            ),
                           ),
                         ),
                     ],
@@ -148,11 +148,14 @@ class _SettingsViewState extends State<SettingsView> {
       case SettingsSection.appearance:
         return AppearanceView(embedded: embedded);
       case SettingsSection.dashboard:
-        return DashboardLayoutView(embedded: embedded);
+        return DashboardLayoutView(
+          embedded: embedded,
+          settings: dependencies.settings,
+        );
       case SettingsSection.backup:
-        return BackupView(embedded: embedded);
+        return BackupView(embedded: embedded, dependencies: dependencies);
       case SettingsSection.about:
-        return AboutView(embedded: embedded);
+        return AboutView(embedded: embedded, core: dependencies.core);
       case SettingsSection.licenses:
         return LicensesView(embedded: embedded);
       default:

@@ -1,11 +1,11 @@
 import 'package:get/get.dart';
 
 import '../../../domains/clash_connection.dart';
-import '../../../services/core_service.dart';
+import '../../../services/core_ports.dart';
 
 class LogsController extends GetxController {
   LogsController(this.core);
-  final CoreService core;
+  final CoreActivityPort core;
   final query = ''.obs;
   final level = 'all'.obs;
   final paused = false.obs;

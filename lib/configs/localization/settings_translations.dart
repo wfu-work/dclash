@@ -13,9 +13,10 @@ abstract final class SettingsTranslations {
     'settingsUpdates': '更新检查',
     'startHidden': '启动时隐藏窗口',
     'startHiddenHint': '下次启动生效；托盘可用后才隐藏窗口',
+    'autoStartHint': '下次打开应用且有可用配置时自动连接',
     'rememberWindowSize': '记住窗口大小',
     'rememberWindowSizeHint': '下次启动恢复上次窗口大小并居中显示',
-    'settingsStartupHint': '有可用配置时自动连接。关闭窗口可继续在托盘运行，退出应用会停止连接并恢复系统代理。',
+    'settingsStartupHint': '可选择在有可用配置时自动连接。关闭窗口可继续在托盘运行，退出应用会停止连接并恢复系统代理。',
     'settingsRestoreLayout': '恢复默认布局',
     'settingsActionDone': '操作已完成',
     'saved': '已保存',
@@ -95,11 +96,13 @@ abstract final class SettingsTranslations {
     'settingsUpdates': 'Updates',
     'startHidden': 'Hide window at startup',
     'startHiddenHint': 'Applies on next launch, once the tray is available',
+    'autoStartHint':
+        'On the next launch, connect automatically when a profile is available',
     'rememberWindowSize': 'Remember window size',
     'rememberWindowSizeHint':
         'Restore the last window size and center it on next launch',
     'settingsStartupHint':
-        'Connects automatically when a profile is available. Closing can keep the app in the tray; quitting stops the connection and restores the system proxy.',
+        'Choose whether to connect automatically when a profile is available. Closing can keep the app in the tray; quitting stops the connection and restores the system proxy.',
     'settingsRestoreLayout': 'Reset layout',
     'settingsActionDone': 'Done',
     'saved': 'Saved',

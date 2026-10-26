@@ -2,22 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services_bridge.dart';
 import '../../../domains/network_diagnostics.dart';
 import '../../../services/core_service.dart';
 import '../../widgets/app_widgets.dart';
 import 'network_diagnostics_controller.dart';
 
 class UrlDiagnosticsView extends StatefulWidget {
-  const UrlDiagnosticsView({super.key, this.initialUrl = ''});
+  const UrlDiagnosticsView({super.key, this.initialUrl = '', this.core});
 
   final String initialUrl;
+  final CoreService? core;
 
   @override
   State<UrlDiagnosticsView> createState() => _UrlDiagnosticsViewState();
 }
 
 class _UrlDiagnosticsViewState extends State<UrlDiagnosticsView> {
-  late final controller = NetworkDiagnosticsController(Get.find<CoreService>());
+  late final controller = NetworkDiagnosticsController(
+    widget.core ?? coreFromGetX(),
+  );
   late final _url = TextEditingController(text: widget.initialUrl);
   final _form = GlobalKey<FormState>();
 
@@ -194,14 +198,17 @@ class _UrlDiagnosticsViewState extends State<UrlDiagnosticsView> {
 }
 
 class ServiceDiagnosticsView extends StatefulWidget {
-  const ServiceDiagnosticsView({super.key});
+  const ServiceDiagnosticsView({super.key, this.core});
+  final CoreService? core;
 
   @override
   State<ServiceDiagnosticsView> createState() => _ServiceDiagnosticsViewState();
 }
 
 class _ServiceDiagnosticsViewState extends State<ServiceDiagnosticsView> {
-  late final controller = NetworkDiagnosticsController(Get.find<CoreService>());
+  late final controller = NetworkDiagnosticsController(
+    widget.core ?? coreFromGetX(),
+  );
 
   @override
   void initState() {

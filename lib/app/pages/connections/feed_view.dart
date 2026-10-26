@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../services/core_ports.dart';
 import '../../widgets/app_widgets.dart';
 import 'connections_controller.dart';
 import 'feed_controller.dart';
 
 class FeedView extends StatefulWidget {
-  const FeedView({super.key, required this.dns});
+  const FeedView({super.key, required this.dns, this.core});
   final bool dns;
+  final CoreActivityPort? core;
   @override
   State<FeedView> createState() => _FeedViewState();
 }
@@ -16,8 +18,10 @@ class FeedView extends StatefulWidget {
 class _FeedViewState extends State<FeedView> {
   late FeedController controller;
 
-  FeedController _createController() =>
-      FeedController(Get.find<ConnectionsController>().core, dns: widget.dns);
+  FeedController _createController() => FeedController(
+    widget.core ?? Get.find<ConnectionsController>().core,
+    dns: widget.dns,
+  );
 
   @override
   void initState() {

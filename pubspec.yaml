@@ -38,7 +38,10 @@ dependencies:
     path: plugins/rust_api
   setup:
     path: plugins/setup
-  local_notifier: ^0.1.6
+  # The vendored copy adds Swift Package Manager support; upstream 0.1.6 is
+  # CocoaPods-only and makes Flutter emit a release-build warning.
+  local_notifier:
+    path: plugins/local_notifier
   hotkey_manager: ^0.2.3
 dependency_overrides:
   hotkey_manager_macos:
@@ -54,9 +57,9 @@ dev_dependencies:
 hooks:
   user_defines:
     setup:
-      build_assets: false
+      build_assets: true
     rust_api:
-      build_assets: false
+      build_assets: true
 flutter:
   uses-material-design: true
   assets:

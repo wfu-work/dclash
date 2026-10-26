@@ -11,6 +11,7 @@ import '../domains/clash_connection.dart';
 import '../domains/core_status.dart';
 import '../domains/proxy_group.dart';
 import '../domains/traffic_statistics.dart';
+import '../platform/core_error.dart';
 import '../platform/core_lifecycle.dart';
 import '../platform/core_rpc.dart';
 import '../platform/core_runtime.dart';
@@ -18,16 +19,25 @@ import '../platform/helper_client.dart';
 import '../platform/startup.dart';
 import '../storage/atomic_file.dart';
 import 'config_builder.dart';
+import 'core_ports.dart';
 import 'profile_service.dart';
 import 'settings_service.dart';
 
-class CoreService extends GetxService with WidgetsBindingObserver {
+class CoreService extends GetxService
+    with WidgetsBindingObserver
+    implements
+        CoreActivityPort,
+        CoreLifecyclePort,
+        CoreProfilePort,
+        CoreProxyPort {
   CoreService(
     this.profiles,
     this.settings, {
     this.preview = false,
     CoreRuntime Function()? runtimeFactory,
     Future<Directory> Function()? supportDirectory,
+    this.recoveryBaseDelay = const Duration(seconds: 1),
+    this.recoveryStablePeriod = const Duration(seconds: 30),
   }) : _runtimeFactory = runtimeFactory ?? createCoreRuntime,
        _supportDirectory = supportDirectory ?? getApplicationSupportDirectory {
     _lifecycle = CoreLifecycle(
@@ -35,19 +45,33 @@ class CoreService extends GetxService with WidgetsBindingObserver {
       cancelStart: () => _runtime?.cancelPendingStart(),
     );
   }
+  @override
   final ProfileService profiles;
+  @override
   final SettingsService settings;
   final bool preview;
   final CoreRuntime Function() _runtimeFactory;
   final Future<Directory> Function() _supportDirectory;
+  final Duration recoveryBaseDelay;
+  final Duration recoveryStablePeriod;
   late final CoreLifecycle _lifecycle;
+  @override
   final status = CoreStatus.stopped.obs;
   final error = RxnString();
+  final errorCategory = Rxn<CoreErrorCategory>();
+  final recovering = false.obs;
+  final recoveryExhausted = false.obs;
+  final recoveryAttempt = 0.obs;
+  @override
   final groups = <ProxyGroup>[].obs;
+  @override
   final connections = <ClashConnection>[].obs;
   final trafficUpdate = Rxn<CoreTrafficUpdate>();
+  @override
   final logs = <CoreLog>[].obs;
+  @override
   final requests = <Map<String, dynamic>>[].obs;
+  @override
   final dnsQueries = <Map<String, dynamic>>[].obs;
   final providers = <Map<String, dynamic>>[].obs;
   final routeState = <String, dynamic>{}.obs;
@@ -59,10 +83,12 @@ class CoreService extends GetxService with WidgetsBindingObserver {
       memory = 0.obs;
   final startedAt = Rxn<DateTime>();
   final version = ''.obs;
+  @override
   final delays = <String, int>{}.obs;
   CoreRuntime? _runtime;
   StreamSubscription<Map<String, dynamic>>? _eventSubscription;
   Timer? _pollTimer;
+  Timer? _recoveryTimer, _recoveryStableTimer;
   Worker? _settingsWorker, _profileWorker, _profileContentWorker;
   String _observedProfile = '';
   bool _initialized = false;
@@ -70,10 +96,13 @@ class CoreService extends GetxService with WidgetsBindingObserver {
   bool _foreground = true;
   int? _scheduledInterval;
   bool _maintenance = false;
+  int _recoveryGeneration = 0;
+  static const _maxRecoveryAttempts = 3;
   int _epoch = 0;
   String _appliedSettings = '';
   String _desiredFingerprint = '';
   String? _appliedProfile;
+  @override
   bool get running => status.value == CoreStatus.running;
 
   Future<void> initialize() async {
@@ -116,7 +145,9 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     });
   }
 
+  @override
   Future<void> start() {
+    _cancelRecovery(resetAttempt: true);
     if (_maintenance) {
       return Future.error(
         const CoreException(
@@ -136,8 +167,15 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     return _lifecycle.request(true);
   }
 
-  Future<void> stop() => _lifecycle.request(false);
+  @override
+  Future<void> stop() {
+    _cancelRecovery(resetAttempt: true);
+    return _lifecycle.request(false);
+  }
+
+  @override
   Future<void> toggle() => _lifecycle.desired ? stop() : start();
+  @override
   Future<void> reload() {
     if (_maintenance) {
       return Future.error(
@@ -150,6 +188,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     return _lifecycle.desired ? _lifecycle.request(true) : Future.value();
   }
 
+  @override
   Future<T> withStoppedCore<T>(Future<T> Function() action) async {
     if (_maintenance ||
         _lifecycle.desired ||
@@ -189,10 +228,14 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     if (profile == null) {
       await _tearDown();
       status.value = CoreStatus.failed;
-      error.value = 'Select or import a profile before connecting.';
-      throw CoreException('profile_required', error.value!);
+      final failure = const CoreException(
+        'profile_required',
+        'Select or import a profile before connecting.',
+      );
+      _recordError(failure);
+      throw failure;
     }
-    error.value = null;
+    _clearError();
     final fields = Map<String, dynamic>.from(settings.fields);
     final fingerprint = _fingerprint(fields);
     _desiredFingerprint = fingerprint;
@@ -281,6 +324,9 @@ class CoreService extends GetxService with WidgetsBindingObserver {
       _appliedSettings = fingerprint;
       _appliedProfile = profile.id;
       startedAt.value = DateTime.now();
+      recovering.value = false;
+      recoveryExhausted.value = false;
+      _scheduleStableRecoveryReset();
       status.value = CoreStatus.running;
       await refreshRuntime();
       _schedulePoll(epoch);
@@ -289,7 +335,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
       try {
         await _tearDown();
       } catch (cleanup) {
-        error.value = '$e; cleanup: $cleanup';
+        _recordError(StateError('$e; cleanup: $cleanup'));
       }
       if (revision == _lifecycle.revision) status.value = CoreStatus.failed;
       rethrow;
@@ -393,6 +439,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     if (running) _schedulePoll(_epoch);
   }
 
+  @override
   Future<void> restart() async {
     if (!running) {
       throw const CoreException('not_running', 'Connect before restarting');
@@ -422,6 +469,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     });
   }
 
+  @override
   Future<void> refreshRuntime() async {
     if (_runtime == null) return;
     final epoch = _epoch;
@@ -617,22 +665,34 @@ class CoreService extends GetxService with WidgetsBindingObserver {
           _recordError(data['error']);
         }
       case 'crash':
-        _recordError(event['data'] ?? 'Core stopped unexpectedly');
+        final failure = CoreException(
+          'process_exit',
+          '${event['data'] ?? 'Core stopped unexpectedly'}',
+        );
+        _recordError(failure);
         status.value = CoreStatus.failed;
-        final cleanup = stop();
+        final shouldRecover = _lifecycle.desired;
+        // A crash is part of the recovery sequence.  Tear the runtime down
+        // without going through the public stop() method, because a manual
+        // stop intentionally resets the bounded recovery counter.
+        final cleanup = _stopAfterCrash();
         final crashRevision = _lifecycle.revision;
         unawaited(
           cleanup
               .then<void>((_) {
                 if (crashRevision == _lifecycle.revision) {
                   status.value = CoreStatus.failed;
+                  if (shouldRecover) _scheduleRecovery();
                 }
               })
-              .catchError(_recordError),
+              .catchError((error) {
+                _recordError(error);
+              }),
         );
     }
   }
 
+  @override
   Future<void> setMode(String mode) async {
     if (!['rule', 'global', 'direct'].contains(mode)) {
       throw const CoreException('mode', 'Invalid proxy mode');
@@ -671,6 +731,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     }
   }
 
+  @override
   Future<void> selectProxy(String group, String name) async {
     final response = _map(
       await invoke('changeProxy', {'group-name': group, 'proxy-name': name}),
@@ -679,6 +740,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     await refreshRuntime();
   }
 
+  @override
   Future<int?> testDelay(String name) async {
     final result = await invoke('asyncTestDelay', {
       'proxy-name': name,
@@ -692,6 +754,7 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     return value;
   }
 
+  @override
   Future<void> testAll() async {
     final names = groups
         .expand((group) => group.nodes)
@@ -704,11 +767,13 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     await refreshRuntime();
   }
 
+  @override
   Future<void> closeAll() async {
     await invoke('closeConnections');
     await _poll(_epoch);
   }
 
+  @override
   Future<void> closeConnection(String id) async {
     await invoke('closeConnection', id);
     await _poll(_epoch);
@@ -787,7 +852,122 @@ class CoreService extends GetxService with WidgetsBindingObserver {
     await DesktopStartup.setEnabled(enabled);
   }
 
+  void _scheduleRecovery() {
+    if (preview || _maintenance || _lifecycle.desired) return;
+    if (recoveryAttempt.value >= _maxRecoveryAttempts) {
+      recovering.value = false;
+      recoveryExhausted.value = true;
+      final generation = _recoveryGeneration;
+      unawaited(
+        _lifecycle
+            .request(false)
+            .then<void>((_) {
+              if (generation == _recoveryGeneration) {
+                status.value = CoreStatus.failed;
+              }
+            })
+            .catchError(_recordError),
+      );
+      return;
+    }
+    final attempt = recoveryAttempt.value + 1;
+    recoveryAttempt.value = attempt;
+    recovering.value = true;
+    recoveryExhausted.value = false;
+    final generation = ++_recoveryGeneration;
+    final multiplier = 1 << (attempt - 1);
+    _recoveryTimer?.cancel();
+    _recoveryTimer = Timer(
+      recoveryBaseDelay * multiplier,
+      () => unawaited(_runRecovery(generation, attempt)),
+    );
+  }
+
+  Future<void> _runRecovery(int generation, int attempt) async {
+    if (generation != _recoveryGeneration ||
+        _maintenance ||
+        _lifecycle.desired ||
+        preview) {
+      return;
+    }
+    _recoveryTimer = null;
+    try {
+      await _lifecycle.request(true);
+      if (generation == _recoveryGeneration) recovering.value = false;
+    } catch (error) {
+      if (generation != _recoveryGeneration) return;
+      _recordError(error);
+      if (_isNonRecoverable(error) || attempt >= _maxRecoveryAttempts) {
+        await _stopAfterRecoveryFailure(generation);
+      } else {
+        // The failed start leaves the lifecycle intent active. Move it back to
+        // stopped before scheduling the next bounded attempt.
+        try {
+          await _lifecycle.request(false);
+        } catch (cleanup) {
+          _recordError(cleanup);
+          await _stopAfterRecoveryFailure(generation);
+          return;
+        }
+        if (generation == _recoveryGeneration) {
+          status.value = CoreStatus.failed;
+          _scheduleRecovery();
+        }
+      }
+    }
+  }
+
+  Future<void> _stopAfterRecoveryFailure(int generation) async {
+    if (generation != _recoveryGeneration) return;
+    recovering.value = false;
+    recoveryExhausted.value = true;
+    try {
+      await _lifecycle.request(false);
+    } catch (error) {
+      _recordError(error);
+    }
+    if (generation == _recoveryGeneration) status.value = CoreStatus.failed;
+  }
+
+  Future<void> _stopAfterCrash() => _lifecycle.request(false);
+
+  bool _isNonRecoverable(Object error) {
+    switch (classifyCoreError(error)) {
+      case CoreErrorCategory.configuration:
+      case CoreErrorCategory.permission:
+      case CoreErrorCategory.systemProxy:
+      case CoreErrorCategory.tun:
+      case CoreErrorCategory.profile:
+      case CoreErrorCategory.maintenance:
+      case CoreErrorCategory.unsupported:
+        return true;
+      case CoreErrorCategory.process:
+      case CoreErrorCategory.timeout:
+      case CoreErrorCategory.connection:
+      case CoreErrorCategory.unknown:
+        return false;
+    }
+  }
+
+  void _cancelRecovery({required bool resetAttempt}) {
+    _recoveryGeneration++;
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
+    recovering.value = false;
+    recoveryExhausted.value = false;
+    if (resetAttempt) recoveryAttempt.value = 0;
+  }
+
+  void _scheduleStableRecoveryReset() {
+    _recoveryStableTimer?.cancel();
+    _recoveryStableTimer = Timer(recoveryStablePeriod, () {
+      if (running && !recovering.value) recoveryAttempt.value = 0;
+    });
+  }
+
   Future<void> disposeRuntime() async {
+    _cancelRecovery(resetAttempt: true);
+    _recoveryStableTimer?.cancel();
     if (_initialized) WidgetsBinding.instance.removeObserver(this);
     _settingsWorker?.dispose();
     _profileWorker?.dispose();
@@ -802,7 +982,17 @@ class CoreService extends GetxService with WidgetsBindingObserver {
   }
 
   void _recordError(Object e) {
-    error.value = e.toString();
+    errorCategory.value = classifyCoreError(e);
+    error.value = coreErrorMessage(e);
+  }
+
+  void recordError(Object e) => _recordError(e);
+
+  String? get errorCategoryLabel => errorCategory.value?.labelKey;
+
+  void _clearError() {
+    error.value = null;
+    errorCategory.value = null;
   }
 
   String _profileFingerprint() {

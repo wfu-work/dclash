@@ -4,6 +4,7 @@ import 'package:dclash_flutter/domains/clash_profile.dart';
 import 'package:dclash_flutter/domains/core_status.dart';
 import 'package:dclash_flutter/domains/traffic_statistics.dart';
 import 'package:dclash_flutter/platform/core_rpc.dart';
+import 'package:dclash_flutter/platform/core_error.dart';
 import 'package:dclash_flutter/platform/core_runtime.dart';
 import 'package:dclash_flutter/services/core_service.dart';
 import 'package:dclash_flutter/services/profile_service.dart';
@@ -43,6 +44,7 @@ class TestRuntime implements CoreRuntime {
   };
   String setupMessage = '';
   bool failTrafficBaseline = false;
+  bool crashOnStart = false;
   Map<String, dynamic> trafficTotals = {'up': 0, 'down': 0};
   Map<String, dynamic> connectionSnapshot = {'connections': []};
   @override
@@ -63,6 +65,9 @@ class TestRuntime implements CoreRuntime {
   @override
   Future<void> start(Map<String, dynamic> fields) async {
     calls.add('start');
+    if (crashOnStart) {
+      controller.add({'type': 'crash', 'data': 'Core process exited'});
+    }
   }
 
   @override
@@ -611,30 +616,64 @@ void main() {
       await service.disposeRuntime();
     },
   );
-  test(
-    'a native crash stays failed after the owned runtime is cleaned up',
-    () async {
-      final runtime = TestRuntime();
-      final service = CoreService(
-        TestProfiles(),
-        settings,
-        runtimeFactory: () => runtime,
-        supportDirectory: () async => directory,
-      );
-      await service.start();
-      runtime.controller.add({'type': 'crash', 'data': 'Core process exited'});
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
-      while ((!runtime.controller.isClosed ||
-              service.status.value != CoreStatus.failed) &&
-          DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
+  test('a native crash is classified and recovers the owned runtime', () async {
+    final crashed = TestRuntime();
+    final replacement = TestRuntime();
+    var creations = 0;
+    final service = CoreService(
+      TestProfiles(),
+      settings,
+      runtimeFactory: () => creations++ == 0 ? crashed : replacement,
+      supportDirectory: () async => directory,
+      recoveryBaseDelay: const Duration(milliseconds: 10),
+    );
+    await service.start();
+    crashed.controller.add({'type': 'crash', 'data': 'Core process exited'});
+    final classifiedDeadline = DateTime.now().add(const Duration(seconds: 1));
+    while (service.errorCategory.value != CoreErrorCategory.process &&
+        DateTime.now().isBefore(classifiedDeadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(service.error.value, contains('Core process exited'));
+    expect(service.errorCategory.value, CoreErrorCategory.process);
+    final deadline = DateTime.now().add(const Duration(seconds: 2));
+    while ((!crashed.controller.isClosed ||
+            service.status.value != CoreStatus.running) &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(crashed.controller.isClosed, isTrue);
+    expect(service.status.value, CoreStatus.running);
+    expect(replacement.calls, contains('open'));
+    await service.disposeRuntime();
+  });
+  test('repeated native crashes stop after the bounded recovery attempts', () async {
+    final runtimes = [
+      for (var i = 0; i < 4; i++) TestRuntime()..crashOnStart = true,
+    ];
+    var creations = 0;
+    final service = CoreService(
+      TestProfiles(),
+      settings,
+      runtimeFactory: () => runtimes[creations++],
+      supportDirectory: () async => directory,
+      recoveryBaseDelay: const Duration(milliseconds: 1),
+    );
+    await service.start();
+    final deadline = DateTime.now().add(const Duration(seconds: 2));
+    while (!service.recoveryExhausted.value &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    expect(service.recoveryExhausted.value, isTrue);
+    expect(service.recoveryAttempt.value, 3);
+    expect(service.status.value, CoreStatus.failed);
+    expect(creations, 4);
+    for (final runtime in runtimes) {
       expect(runtime.controller.isClosed, isTrue);
-      expect(service.status.value, CoreStatus.failed);
-      expect(service.error.value, contains('Core process exited'));
-      await service.disposeRuntime();
-    },
-  );
+    }
+    await service.disposeRuntime();
+  });
   test(
     'an active profile content revision reapplies without an id change',
     () async {

@@ -7,18 +7,23 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../domains/clash_profile.dart';
-import '../../../services/script_library_service.dart';
 import '../../../storage/atomic_file.dart';
 import '../../widgets/app_widgets.dart';
 import 'profile_builder_view.dart';
 import 'profiles_controller.dart';
+import 'profiles_dependencies.dart';
 import 'widgets/effective_config_view.dart';
 import 'widgets/profile_card.dart';
 import 'widgets/profile_editor.dart';
 import 'widgets/profile_settings_dialog.dart';
 
 class ProfilesView extends GetView<ProfilesController> {
-  const ProfilesView({super.key});
+  const ProfilesView({super.key, this.dependencies});
+
+  final ProfilesDependencies? dependencies;
+
+  ProfilesDependencies get _dependencies =>
+      dependencies ?? ProfilesDependencies.fromGetX();
 
   Future<void> _run(
     BuildContext context,
@@ -81,6 +86,7 @@ class ProfilesView extends GetView<ProfilesController> {
             builder: (_) => ProfileBuilderView(
               profile: profile,
               initialContent: content,
+              resources: _dependencies.resources,
               onSave: (content) => controller.save(
                 id: profile.id,
                 name: profile.name,
@@ -127,7 +133,7 @@ class ProfilesView extends GetView<ProfilesController> {
           context: context,
           builder: (_) => ProfileSettingsDialog(
             profile: profile,
-            scripts: Get.find<ScriptLibraryService>().scripts.toList(),
+            scripts: _dependencies.scripts?.scripts.toList() ?? const [],
           ),
         );
         if (updated != null) await controller.updateProfile(updated);

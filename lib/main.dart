@@ -8,20 +8,23 @@ import 'app/widgets/app_icon.dart';
 import 'app/widgets/app_message.dart';
 import 'app/widgets/app_system_ui.dart';
 import 'configs/app_initializer.dart';
+import 'configs/app_startup.dart';
 import 'configs/theme/app_theme.dart';
-import 'services/core_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppSystemUi.initialize();
   try {
-    await AppInitializer.init(
+    final services = await AppInitializer.init(
       preview: const bool.fromEnvironment('DC_PREVIEW'),
     );
-    runApp(const CloudriftApp());
-    final core = Get.find<CoreService>();
-    if (!const bool.fromEnvironment('DC_PREVIEW') &&
-        core.profiles.active != null) {
+    runApp(CloudriftApp(services: services));
+    final core = services.core;
+    if (shouldConnectOnLaunch(
+      preview: const bool.fromEnvironment('DC_PREVIEW'),
+      autoStart: core.settings.fields['autoStart'] == true,
+      hasActiveProfile: core.profiles.active != null,
+    )) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(
           core.start().catchError((Object error) {

@@ -3,14 +3,14 @@ import 'package:get/get.dart';
 
 import '../../../domains/core_status.dart';
 import '../../../services/backup_service.dart';
-import '../../../services/core_service.dart';
-import '../../../services/settings_service.dart';
 import '../../widgets/app_widgets.dart';
+import 'settings_dependencies.dart';
 
 class BackupView extends StatefulWidget {
-  const BackupView({super.key, this.embedded = false});
+  const BackupView({super.key, this.embedded = false, this.dependencies});
 
   final bool embedded;
+  final SettingsDependencies? dependencies;
 
   @override
   State<BackupView> createState() => _BackupViewState();
@@ -18,8 +18,10 @@ class BackupView extends StatefulWidget {
 
 class _BackupViewState extends State<BackupView> {
   bool _busy = false;
-  final _settings = Get.find<SettingsService>();
-  final _backup = Get.find<BackupService>();
+  late final _dependencies =
+      widget.dependencies ?? SettingsDependencies.fromGetX();
+  late final _settings = _dependencies.settings;
+  late final _backup = _dependencies.backup ?? Get.find<BackupService>();
 
   Future<void> _run(
     Future<bool> Function() operation,
@@ -29,7 +31,7 @@ class _BackupViewState extends State<BackupView> {
     if (_busy) return;
     try {
       setState(() => _busy = true);
-      final core = Get.find<CoreService>();
+      final core = _dependencies.core;
       bool completed;
       if (restore) {
         if (![

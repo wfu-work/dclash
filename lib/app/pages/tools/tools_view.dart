@@ -4,12 +4,7 @@ import 'package:get/get.dart';
 import '../../../configs/theme/app_theme.dart';
 import '../../../domains/network_health.dart';
 import '../../../domains/traffic_statistics.dart';
-import '../../../services/core_service.dart';
-import '../../../services/diagnostic_report_service.dart';
 import '../../../services/health_history_service.dart';
-import '../../../services/network_timeline_service.dart';
-import '../../../services/node_quality_service.dart';
-import '../../../services/traffic_statistics_service.dart';
 import '../../widgets/app_widgets.dart';
 import '../connections/connections_view.dart';
 import '../connections/feed_view.dart';
@@ -26,33 +21,18 @@ import 'node_quality_view.dart';
 import 'dns_observatory_view.dart';
 import 'connection_governance_view.dart';
 import 'traffic_statistics_view.dart';
+import 'tools_dependencies.dart';
 
 /// A task workspace for diagnosis and runtime observation.
 ///
 /// Settings own persistent configuration. This page surfaces actions, status,
 /// and the records useful while investigating a connection problem.
 class ToolsView extends StatelessWidget {
-  const ToolsView({super.key});
+  const ToolsView({super.key, this.dependencies});
+  final ToolsDependencies? dependencies;
 
-  CoreService get _core => Get.find<CoreService>();
-  HealthHistoryService? get _history => Get.isRegistered<HealthHistoryService>()
-      ? Get.find<HealthHistoryService>()
-      : null;
-  TrafficStatisticsService? get _traffic =>
-      Get.isRegistered<TrafficStatisticsService>()
-      ? Get.find<TrafficStatisticsService>()
-      : null;
-  NetworkTimelineService? get _timeline =>
-      Get.isRegistered<NetworkTimelineService>()
-      ? Get.find<NetworkTimelineService>()
-      : null;
-  DiagnosticReportService? get _report =>
-      Get.isRegistered<DiagnosticReportService>()
-      ? Get.find<DiagnosticReportService>()
-      : null;
-  NodeQualityService? get _nodeQuality => Get.isRegistered<NodeQualityService>()
-      ? Get.find<NodeQualityService>()
-      : null;
+  ToolsDependencies get _services =>
+      dependencies ?? ToolsDependencies.fromGetX();
 
   void _open(BuildContext context, Widget page) =>
       Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -81,12 +61,13 @@ class ToolsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final core = _core;
-    final history = _history;
-    final traffic = _traffic;
-    final timeline = _timeline;
-    final report = _report;
-    final nodeQuality = _nodeQuality;
+    final services = _services;
+    final core = services.core;
+    final history = services.healthHistory;
+    final traffic = services.trafficStatistics;
+    final timeline = services.timeline;
+    final report = services.diagnostics;
+    final nodeQuality = services.nodeQuality;
     return AppPage(
       maxContentWidth: 980,
       title: 'tools'.tr,
@@ -107,7 +88,10 @@ class ToolsView extends StatelessWidget {
             _PrimaryHealthCard(
               key: const ValueKey('toolsHealthCard'),
               summary: healthSummary,
-              onOpen: () => _open(context, const NetworkHealthView()),
+              onOpen: () => _open(
+                context,
+                NetworkHealthView(core: core, history: history),
+              ),
               onHistory: history == null
                   ? null
                   : () => _open(
@@ -130,7 +114,10 @@ class ToolsView extends StatelessWidget {
                   subtitle: 'toolsTrafficToday'.trParams({
                     'amount': formatBytes(todayTraffic),
                   }),
-                  onTap: () => _open(context, const TrafficStatisticsView()),
+                  onTap: () => _open(
+                    context,
+                    TrafficStatisticsView(statistics: traffic),
+                  ),
                 ),
                 _ToolCard(
                   key: const ValueKey('toolsUrlCard'),
@@ -139,7 +126,7 @@ class ToolsView extends StatelessWidget {
                   subtitle: running
                       ? 'toolsUrlReady'.tr
                       : 'diagnosticConnectFirst'.tr,
-                  onTap: () => _open(context, const UrlDiagnosticsView()),
+                  onTap: () => _open(context, UrlDiagnosticsView(core: core)),
                 ),
                 _ToolCard(
                   key: const ValueKey('toolsRouteExplainCard'),
@@ -157,7 +144,8 @@ class ToolsView extends StatelessWidget {
                   subtitle: running
                       ? 'toolsServicesReady'.tr
                       : 'diagnosticConnectFirst'.tr,
-                  onTap: () => _open(context, const ServiceDiagnosticsView()),
+                  onTap: () =>
+                      _open(context, ServiceDiagnosticsView(core: core)),
                 ),
                 if (timeline != null)
                   _ToolCard(
@@ -241,9 +229,9 @@ class ToolsView extends StatelessWidget {
                   label: 'toolsRequestRecords'.tr,
                   onTap: () => _open(
                     context,
-                    const _FeatureRoute(
+                    _FeatureRoute(
                       title: 'requests',
-                      child: FeedView(dns: false),
+                      child: FeedView(dns: false, core: core),
                     ),
                   ),
                 ),
@@ -255,9 +243,9 @@ class ToolsView extends StatelessWidget {
                   label: 'toolsDnsRecords'.tr,
                   onTap: () => _open(
                     context,
-                    const _FeatureRoute(
+                    _FeatureRoute(
                       title: 'dnsQueries',
-                      child: FeedView(dns: true),
+                      child: FeedView(dns: true, core: core),
                     ),
                   ),
                 ),
@@ -290,13 +278,16 @@ class ToolsView extends StatelessWidget {
                   _ResourceRow(
                     title: 'providers'.tr,
                     icon: AppIcons.cloud,
-                    onTap: () => _open(context, const ProvidersView()),
+                    onTap: () => _open(context, ProvidersView(core: core)),
                   ),
                   const Divider(height: 1),
                   _ResourceRow(
                     title: 'scriptLibrary'.tr,
                     icon: AppIcons.code,
-                    onTap: () => _open(context, const ScriptLibraryView()),
+                    onTap: () => _open(
+                      context,
+                      ScriptLibraryView(service: services.scripts),
+                    ),
                   ),
                 ],
               ),

@@ -391,6 +391,13 @@ abstract final class AppIconPaths {
       ],
       [],
     ),
+    AppIcons.notifications: (
+      [
+        'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9',
+        'M13.73 21a2 2 0 0 1-3.46 0',
+      ],
+      [],
+    ),
     AppIcons.navigation: (['M3 11L22 2L13 21L11 13L3 11Z'], []),
     AppIcons.externalLink: (
       [

@@ -48,10 +48,10 @@ extension SettingsSectionData on SettingsSection {
     SettingsSection.startup => AppIcons.power,
     SettingsSection.dashboard => AppIcons.dashboardLayout,
     SettingsSection.shortcuts => AppIcons.key,
-    SettingsSection.notifications => AppIcons.info,
+    SettingsSection.notifications => AppIcons.notifications,
     SettingsSection.general => AppIcons.globe,
     SettingsSection.network => AppIcons.router,
-    SettingsSection.advanced => AppIcons.code,
+    SettingsSection.advanced => AppIcons.sliders,
     SettingsSection.access => AppIcons.apps,
     SettingsSection.kernel => AppIcons.server,
     SettingsSection.backup => AppIcons.cloudSync,
@@ -63,7 +63,12 @@ extension SettingsSectionData on SettingsSection {
   };
   bool get visible => switch (this) {
     SettingsSection.access => Platform.isAndroid,
-    SettingsSection.startup || SettingsSection.shortcuts =>
+    SettingsSection.startup =>
+      Platform.isAndroid ||
+          Platform.isMacOS ||
+          Platform.isWindows ||
+          Platform.isLinux,
+    SettingsSection.shortcuts =>
       Platform.isMacOS || Platform.isWindows || Platform.isLinux,
     _ => true,
   };

@@ -110,7 +110,7 @@ macos: ## 构建 macOS Debug App
 	$(FLUTTER_PATH) "$(DART)" tool/build_macos.dart $(CARGO_ARG) --debug --no-pub $(PREVIEW_ARG)
 
 macos-release: ## 构建 macOS Release App
-	FLUTTER_XCODE_ARCHS="$(MACOS_ARCH)" $(FLUTTER_PATH) "$(DART)" tool/build_macos.dart $(CARGO_ARG) --release --no-pub
+	FLUTTER_XCODE_ARCHS="$(MACOS_ARCH)" FLUTTER_MACOS_ARM64_ONLY="$(if $(filter arm64,$(MACOS_ARCH)),true,false)" $(FLUTTER_PATH) "$(DART)" tool/build_macos.dart $(CARGO_ARG) --release --no-pub
 
 macos-preview: ## 构建带 DC_PREVIEW=true 的 macOS 预览 App
 	$(MAKE) macos PREVIEW=true

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services_bridge.dart';
 import '../../../domains/clash_profile.dart';
 import '../../../domains/resource_item.dart';
 import '../../../services/resource_library_service.dart';
@@ -19,11 +20,13 @@ class ProfileBuilderView extends StatefulWidget {
     required this.profile,
     required this.initialContent,
     required this.onSave,
+    this.resources,
   });
 
   final ClashProfile profile;
   final String initialContent;
   final Future<void> Function(String content) onSave;
+  final ResourceLibraryService? resources;
 
   @override
   State<ProfileBuilderView> createState() => _ProfileBuilderViewState();
@@ -213,7 +216,12 @@ class _ProfileBuilderViewState extends State<ProfileBuilderView> {
 
   Future<void> _useResource(ResourceKind kind) async {
     if (_saving || _draft == null) return;
-    final service = Get.find<ResourceLibraryService>();
+    final service =
+        widget.resources ?? optionalServiceFromGetX<ResourceLibraryService>();
+    if (service == null) {
+      showAppError(context, StateError('Resource library is unavailable.'));
+      return;
+    }
     final item = await showDialog<ResourceItem>(
       context: context,
       builder: (_) => ResourcePickerDialog(

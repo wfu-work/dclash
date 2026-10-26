@@ -49,32 +49,39 @@ class SettingsSidebar extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  for (final group in SettingsNavigation.visibleGroups) ...[
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                      child: Text(
-                        group.titleKey.tr,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
+              child: ScrollConfiguration(
+                // Keep wheel/trackpad scrolling while removing the desktop
+                // thumb that competes with the sidebar's visual edge.
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    for (final group in SettingsNavigation.visibleGroups) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        child: Text(
+                          group.titleKey.tr,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    for (final section in group.sections) ...[
-                      _MenuItem(
-                        key: ValueKey('settingsMenu:${section.key}'),
-                        section: section,
-                        selected: section == selected,
-                        onTap: () => onSelected(section),
-                      ),
-                      const SizedBox(height: 3),
+                      for (final section in group.sections) ...[
+                        _MenuItem(
+                          key: ValueKey('settingsMenu:${section.key}'),
+                          section: section,
+                          selected: section == selected,
+                          onTap: () => onSelected(section),
+                        ),
+                        const SizedBox(height: 3),
+                      ],
+                      const SizedBox(height: 18),
                     ],
-                    const SizedBox(height: 18),
                   ],
-                ],
+                ),
               ),
             ),
             const Divider(),

@@ -2,19 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services.dart';
+import '../../../configs/app_services_bridge.dart';
 import '../../../configs/theme/app_theme.dart';
 import '../../../services/core_service.dart';
 import '../../widgets/app_navigation_item.dart';
 import '../../widgets/app_widgets.dart';
 import '../../widgets/app_workspace_surface.dart';
 import '../dashboard/dashboard_view.dart';
+import '../dashboard/dashboard_dependencies.dart';
+import '../profiles/profiles_dependencies.dart';
 import '../profiles/profiles_view.dart';
+import '../proxies/proxies_dependencies.dart';
 import '../proxies/proxies_view.dart';
 import '../tools/tools_view.dart';
+import '../tools/tools_dependencies.dart';
 import 'workspace_controller.dart';
 
 class WorkspaceView extends GetView<WorkspaceController> {
-  const WorkspaceView({super.key});
+  const WorkspaceView({super.key, this.services});
+  final AppServices? services;
   static const labels = ['home', 'proxies', 'profiles', 'tools'];
   static const icons = [
     AppIcons.dashboard,
@@ -26,111 +33,127 @@ class WorkspaceView extends GetView<WorkspaceController> {
     AppIcons.layers,
     AppIcons.terminal,
   ];
-  static const pages = <Widget>[
-    DashboardView(),
-    ProxiesView(),
-    ProfilesView(),
-    ToolsView(),
+  AppServices get _dependencies => services ?? appServicesFromGetX();
+
+  List<Widget> get _pages => [
+    DashboardView(
+      dependencies: DashboardDependencies.fromAppServices(_dependencies),
+      onOpenSettings: controller.openSettings,
+      onOpenProfiles: () => controller.select(2),
+      onOpenProxies: () => controller.select(1),
+      onOpenConnections: () => controller.select(3),
+    ),
+    ProxiesView(
+      dependencies: ProxiesDependencies.fromAppServices(_dependencies),
+    ),
+    ProfilesView(
+      dependencies: ProfilesDependencies.fromAppServices(_dependencies),
+    ),
+    ToolsView(dependencies: ToolsDependencies.fromAppServices(_dependencies)),
   ];
 
   @override
-  Widget build(BuildContext context) => CallbackShortcuts(
-    bindings: {
-      for (var i = 0; i < labels.length; i++) ...{
-        SingleActivator(
-          [
-            LogicalKeyboardKey.digit1,
-            LogicalKeyboardKey.digit2,
-            LogicalKeyboardKey.digit3,
-            LogicalKeyboardKey.digit4,
-          ][i],
-          meta: true,
-        ): () =>
-            controller.select(i),
-        SingleActivator(
-          [
-            LogicalKeyboardKey.digit1,
-            LogicalKeyboardKey.digit2,
-            LogicalKeyboardKey.digit3,
-            LogicalKeyboardKey.digit4,
-          ][i],
-          control: true,
-        ): () =>
-            controller.select(i),
+  Widget build(BuildContext context) {
+    final pages = _pages;
+    final core = _dependencies.core;
+    return CallbackShortcuts(
+      bindings: {
+        for (var i = 0; i < labels.length; i++) ...{
+          SingleActivator(
+            [
+              LogicalKeyboardKey.digit1,
+              LogicalKeyboardKey.digit2,
+              LogicalKeyboardKey.digit3,
+              LogicalKeyboardKey.digit4,
+            ][i],
+            meta: true,
+          ): () =>
+              controller.select(i),
+          SingleActivator(
+            [
+              LogicalKeyboardKey.digit1,
+              LogicalKeyboardKey.digit2,
+              LogicalKeyboardKey.digit3,
+              LogicalKeyboardKey.digit4,
+            ][i],
+            control: true,
+          ): () =>
+              controller.select(i),
+        },
       },
-    },
-    child: Focus(
-      autofocus: true,
-      child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, box) {
-            final desktop = box.maxWidth >= 840;
-            return SafeArea(
-              // On desktop the main surface is allowed to paint beneath the
-              // transparent macOS titlebar. The sidebar keeps its own safe
-              // inset so the traffic lights remain unobstructed.
-              top: !desktop,
-              bottom: false,
-              child: ColoredBox(
-                color: desktop
-                    ? Theme.of(context).extension<AppSurfaces>()!.window
-                    : Theme.of(context).colorScheme.surface,
-                child: Column(
-                  children: [
-                    if (const bool.fromEnvironment('DC_PREVIEW'))
-                      Container(
-                        color: Theme.of(context).colorScheme.primaryContainer,
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 5,
-                          horizontal: 16,
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          body: LayoutBuilder(
+            builder: (context, box) {
+              final desktop = box.maxWidth >= 840;
+              return SafeArea(
+                // On desktop the main surface is allowed to paint beneath the
+                // transparent macOS titlebar. The sidebar keeps its own safe
+                // inset so the traffic lights remain unobstructed.
+                top: !desktop,
+                bottom: false,
+                child: ColoredBox(
+                  color: desktop
+                      ? Theme.of(context).extension<AppSurfaces>()!.window
+                      : Theme.of(context).colorScheme.surface,
+                  child: Column(
+                    children: [
+                      if (const bool.fromEnvironment('DC_PREVIEW'))
+                        Container(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 5,
+                            horizontal: 16,
+                          ),
+                          child: Text(
+                            'preview'.tr,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                         ),
-                        child: Text(
-                          'preview'.tr,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                      ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (desktop)
-                            SafeArea(
-                              top: true,
-                              bottom: false,
-                              child: _sidebar(context),
-                            ),
-                          Expanded(
-                            child: Obx(
-                              () => AppWorkspaceSurface(
-                                desktop: desktop,
-                                child: IndexedStack(
-                                  index: controller.index.value,
-                                  children: [
-                                    for (var i = 0; i < pages.length; i++)
-                                      controller.visited.contains(i)
-                                          ? pages[i]
-                                          : const SizedBox.shrink(),
-                                  ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (desktop)
+                              SafeArea(
+                                top: true,
+                                bottom: false,
+                                child: _sidebar(context, core),
+                              ),
+                            Expanded(
+                              child: Obx(
+                                () => AppWorkspaceSurface(
+                                  desktop: desktop,
+                                  child: IndexedStack(
+                                    index: controller.index.value,
+                                    children: [
+                                      for (var i = 0; i < pages.length; i++)
+                                        controller.visited.contains(i)
+                                            ? pages[i]
+                                            : const SizedBox.shrink(),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    if (!desktop) _dock(context),
-                  ],
+                      if (!desktop) _dock(context),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _sidebar(BuildContext context) => Container(
+  Widget _sidebar(BuildContext context, CoreService core) => Container(
     width: 208,
     color: Theme.of(context).extension<AppSurfaces>()!.sidebar,
     padding: const EdgeInsets.fromLTRB(12, 28, 12, 16),
@@ -180,7 +203,6 @@ class WorkspaceView extends GetView<WorkspaceController> {
         ),
         const Spacer(),
         Obx(() {
-          final core = Get.find<CoreService>();
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
             child: Row(

@@ -1,14 +1,14 @@
 import 'package:get/get.dart';
 
 import '../../../domains/proxy_group.dart';
-import '../../../services/core_service.dart';
+import '../../../services/core_ports.dart';
 import '../../../services/settings_service.dart';
 import '../../../utils/yaml_config.dart';
 
 class ProxiesController extends GetxController {
   ProxiesController(this.core, this.settings);
 
-  final CoreService core;
+  final CoreProxyPort core;
   final SettingsService settings;
   final query = ''.obs;
   final selectedGroup = ''.obs;

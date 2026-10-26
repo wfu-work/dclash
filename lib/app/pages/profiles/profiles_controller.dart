@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 import '../../../domains/clash_profile.dart';
 import '../../../domains/core_status.dart';
 import '../../../services/config_builder.dart';
-import '../../../services/core_service.dart';
+import '../../../services/core_ports.dart';
 import '../../../services/profile_service.dart';
 import '../../../storage/atomic_file.dart';
 import '../../../utils/yaml_config.dart';
@@ -37,7 +37,7 @@ EffectiveProfileConfig _safeEffectiveConfig(String content) {
 class ProfilesController extends GetxController {
   ProfilesController(this.profiles, this.core);
   final ProfileService profiles;
-  final CoreService core;
+  final CoreProfilePort core;
   final query = ''.obs;
   final busy = <String>{}.obs;
   bool get coreActive =>

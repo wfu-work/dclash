@@ -1,11 +1,11 @@
 import 'package:get/get.dart';
 
 import '../../../domains/clash_connection.dart';
-import '../../../services/core_service.dart';
+import '../../../services/core_ports.dart';
 
 class ConnectionsController extends GetxController {
   ConnectionsController(this.core);
-  final CoreService core;
+  final CoreActivityPort core;
   final query = ''.obs;
   final sort = 'recent'.obs;
   final closing = <String>{}.obs;

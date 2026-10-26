@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../../configs/app_services_bridge.dart';
 import '../../../services/core_service.dart';
 import '../../widgets/app_widgets.dart';
 
 class AboutView extends StatefulWidget {
-  const AboutView({super.key, this.embedded = false});
+  const AboutView({super.key, this.embedded = false, this.core});
 
   final bool embedded;
+  final CoreService? core;
 
   @override
   State<AboutView> createState() => _AboutViewState();
@@ -108,7 +110,8 @@ class _AboutViewState extends State<AboutView> {
                     Text('aboutAppInfo'.tr, style: theme.textTheme.titleSmall),
                     const SizedBox(height: 18),
                     Obx(() {
-                      final coreVersion = Get.find<CoreService>().version.value;
+                      final coreVersion =
+                          (widget.core ?? coreFromGetX()).version.value;
                       final details = <(String, String)>[
                         ('version'.tr, info?.version ?? unavailable),
                         (

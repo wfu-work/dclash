@@ -2,11 +2,11 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 
-import '../../../services/core_service.dart';
+import '../../../services/core_ports.dart';
 
 class FeedController extends GetxController {
   FeedController(this.core, {required this.dns});
-  final CoreService core;
+  final CoreActivityPort core;
   final bool dns;
   final query = ''.obs;
   final paused = false.obs;

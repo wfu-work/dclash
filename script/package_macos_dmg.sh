@@ -33,6 +33,14 @@ case "$TASK_ARCH" in
   *) printf 'MACOS_ARCH 只支持 arm64 或 x86_64。\n' >&2; exit 1 ;;
 esac
 export FLUTTER_XCODE_ARCHS="$TASK_ARCH"
+# Xcode 27 no longer needs a universal macOS binary. Tell Flutter explicitly
+# for ARM DMGs so it does not emit the deprecation warning and so the selected
+# architecture is applied consistently to the app and its embedded runtime.
+if [[ "$TASK_ARCH" == arm64 ]]; then
+  export FLUTTER_MACOS_ARM64_ONLY=true
+else
+  export FLUTTER_MACOS_ARM64_ONLY=false
+fi
 
 TASK_CARGO_HOME="${CARGO_HOME:-.dart_tool/cargo-home}"
 TASK_BUILD_ARGS=(
@@ -58,7 +66,13 @@ if [[ ! -x "$TASK_APP/Contents/MacOS/$TASK_EXECUTABLE" ]]; then
   printf 'Release 应用缺少可执行文件。\n' >&2
   exit 1
 fi
+TASK_RUST_LIBRARY="$TASK_APP/Contents/Frameworks/rust_api.framework/Versions/Current/rust_api"
+if [[ ! -f "$TASK_RUST_LIBRARY" ]]; then
+  printf 'Release 应用缺少 rust_api.framework；请确认 rust_api Native Assets 未被禁用。\n' >&2
+  exit 1
+fi
 /usr/bin/lipo "$TASK_APP/Contents/MacOS/$TASK_EXECUTABLE" -verify_arch "$TASK_ARCH"
+/usr/bin/lipo "$TASK_RUST_LIBRARY" -verify_arch "$TASK_ARCH"
 /usr/bin/codesign --verify --deep --strict "$TASK_APP"
 
 TASK_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$TASK_PLIST")"

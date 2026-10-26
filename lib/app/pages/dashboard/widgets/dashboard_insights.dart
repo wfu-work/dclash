@@ -365,7 +365,7 @@ class DashboardRecentEvents extends StatelessWidget {
                 ),
               ),
             for (var index = 0; index < events.length; index++) ...[
-              if (index > 0) const Divider(height: 1),
+              if (index > 0) const SizedBox(height: 8),
               _EventPreview(event: events[index], onTap: onOpen),
             ],
           ],

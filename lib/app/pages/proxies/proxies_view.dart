@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../domains/proxy_group.dart';
+import '../../../services/core_ports.dart';
+import '../../../services/settings_service.dart';
 import '../../widgets/app_widgets.dart';
 import 'proxies_controller.dart';
+import 'proxies_dependencies.dart';
 import 'widgets/proxy_node_tile.dart';
 
 class ProxiesView extends GetView<ProxiesController> {
-  const ProxiesView({super.key});
+  const ProxiesView({super.key, this.dependencies});
+
+  final ProxiesDependencies? dependencies;
+
+  CoreProxyPort get _core => dependencies?.core ?? controller.core;
+  SettingsService get _settings =>
+      dependencies?.settings ?? controller.settings;
 
   Future<void> _run(
     BuildContext context,
@@ -29,11 +38,11 @@ class ProxiesView extends GetView<ProxiesController> {
     actions: [
       Obx(() {
         final testing = controller.testingAll.value;
-        final running = controller.core.running;
+        final running = _core.running;
         final onPressed = testing
             ? null
             : () => _run(context, () async {
-                if (!controller.core.running) {
+                if (!_core.running) {
                   throw StateError('featureStartCore'.tr);
                 }
                 await controller.testAll();
@@ -92,7 +101,7 @@ class ProxiesView extends GetView<ProxiesController> {
               return AppEmpty(
                 icon: AppIcons.connections,
                 title: 'proxyEmpty'.tr,
-                message: controller.core.running
+                message: _core.running
                     ? 'proxyEmptyRunning'.tr
                     : controller.hasActiveProfile
                     ? 'proxyEmptyConfig'.tr
@@ -146,7 +155,7 @@ class ProxiesView extends GetView<ProxiesController> {
   );
 
   Widget _modeBar(BuildContext context) => Obx(() {
-    final current = switch (controller.settings.fields['mode']) {
+    final current = switch (_settings.fields['mode']) {
       'global' => 'global',
       'direct' => 'direct',
       _ => 'rule',
@@ -174,7 +183,7 @@ class ProxiesView extends GetView<ProxiesController> {
       onSelectionChanged: (values) {
         final mode = values.firstOrNull;
         if (mode == null || mode == current) return;
-        _run(context, () => controller.core.setMode(mode));
+        _run(context, () => _core.setMode(mode));
       },
     );
     return AppCard(
@@ -212,7 +221,7 @@ class ProxiesView extends GetView<ProxiesController> {
                   ],
                   onChanged: (mode) {
                     if (mode == null || mode == current) return;
-                    _run(context, () => controller.core.setMode(mode));
+                    _run(context, () => _core.setMode(mode));
                   },
                 ),
               ],
@@ -365,7 +374,7 @@ class ProxiesView extends GetView<ProxiesController> {
           onPressed: testing
               ? null
               : () => _run(context, () async {
-                  if (!controller.core.running) {
+                  if (!_core.running) {
                     throw StateError('featureStartCore'.tr);
                   }
                   await controller.testGroup(group);
@@ -443,11 +452,11 @@ class ProxiesView extends GetView<ProxiesController> {
               delay: controller.delay(node),
               testing: controller.testing.contains(node.name),
               compact: !grid,
-              onSelect: group.selectable && controller.core.running
+              onSelect: group.selectable && _core.running
                   ? () => _run(context, () => controller.select(node))
                   : null,
               onTest: () => _run(context, () async {
-                if (!controller.core.running) {
+                if (!_core.running) {
                   throw StateError('featureStartCore'.tr);
                 }
                 await controller.test(node);

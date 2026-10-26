@@ -101,4 +101,24 @@ void main() {
     expect(find.text('Background refresh interval'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('startup auto-connect switch persists from the page', (
+    tester,
+  ) async {
+    await initializeServices();
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: AppTranslations(),
+        locale: const Locale('en', 'US'),
+        theme: AppTheme.resolve(Brightness.light, 'blue'),
+        home: const SettingsView(section: 'startup'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Connect on launch'), findsOneWidget);
+    expect(Get.find<SettingsService>().fields['autoStart'], isTrue);
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    expect(Get.find<SettingsService>().fields['autoStart'], isFalse);
+  });
 }

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services.dart';
+import '../settings/settings_dependencies.dart';
 import '../settings/settings_view.dart';
 
 class WorkspaceController extends GetxController {
+  WorkspaceController([this.services]);
+  final AppServices? services;
   final index = 0.obs;
   final visited = <int>{0}.obs;
 
@@ -14,8 +18,14 @@ class WorkspaceController extends GetxController {
   }
 
   void openSettings(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsView()));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SettingsView(
+          dependencies: services == null
+              ? null
+              : SettingsDependencies.fromAppServices(services!),
+        ),
+      ),
+    );
   }
 }

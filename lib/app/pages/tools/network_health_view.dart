@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import '../../../configs/app_services_bridge.dart';
 import '../../../domains/network_health.dart';
 import '../../../platform/network_health_host.dart';
 import '../../../services/core_service.dart';
@@ -16,10 +17,11 @@ import 'network_health_controller.dart';
 import 'network_health_history_view.dart';
 
 class NetworkHealthView extends StatefulWidget {
-  const NetworkHealthView({super.key, this.host, this.history});
+  const NetworkHealthView({super.key, this.host, this.history, this.core});
 
   final NetworkHealthHost? host;
   final HealthHistoryService? history;
+  final CoreService? core;
 
   @override
   State<NetworkHealthView> createState() => _NetworkHealthViewState();
@@ -27,13 +29,9 @@ class NetworkHealthView extends StatefulWidget {
 
 class _NetworkHealthViewState extends State<NetworkHealthView> {
   late final controller = NetworkHealthController(
-    Get.find<CoreService>(),
+    widget.core ?? coreFromGetX(),
     host: widget.host,
-    history:
-        widget.history ??
-        (Get.isRegistered<HealthHistoryService>()
-            ? Get.find<HealthHistoryService>()
-            : null),
+    history: widget.history ?? optionalServiceFromGetX<HealthHistoryService>(),
   );
   late final _url = TextEditingController(text: controller.defaultUrl);
   final _form = GlobalKey<FormState>();

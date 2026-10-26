@@ -20,23 +20,24 @@ extension _SettingsFeatures on _SettingsViewState {
   Widget _startup(BuildContext context) => Column(
     children: [
       _rows([
-        _switch(context, 'launchAtLogin'),
-        _switch(context, 'startHidden', subtitle: 'startHiddenHint'),
-        _switch(context, 'minimizeToTray'),
-        _switch(
-          context,
-          'rememberWindowSize',
-          subtitle: 'rememberWindowSizeHint',
-        ),
+        _switch(context, 'autoStart', subtitle: 'autoStartHint'),
+        if (_desktopPlatform) ...[
+          _switch(context, 'launchAtLogin'),
+          _switch(context, 'startHidden', subtitle: 'startHiddenHint'),
+          _switch(context, 'minimizeToTray'),
+          _switch(
+            context,
+            'rememberWindowSize',
+            subtitle: 'rememberWindowSizeHint',
+          ),
+        ],
       ]),
-      _hint('settingsStartupHint'),
+      if (_desktopPlatform) _hint('settingsStartupHint'),
     ],
   );
 
   Widget _shortcuts(BuildContext context) {
-    final service = Get.isRegistered<DesktopShortcutService>()
-        ? Get.find<DesktopShortcutService>()
-        : null;
+    final service = dependencies.shortcuts;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -76,9 +77,7 @@ extension _SettingsFeatures on _SettingsViewState {
   }
 
   Widget _notifications(BuildContext context) {
-    final service = Get.isRegistered<ProfileNotificationService>()
-        ? Get.find<ProfileNotificationService>()
-        : null;
+    final service = dependencies.notifications;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -151,6 +150,7 @@ extension _SettingsFeatures on _SettingsViewState {
   Widget _kernel(BuildContext context) {
     final core = controller.core;
     final active = _helperCoreActive;
+    final desktop = dependencies.desktop;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -192,16 +192,14 @@ extension _SettingsFeatures on _SettingsViewState {
                       )
                     : null,
               ),
-              if (Platform.isMacOS &&
-                  Get.isRegistered<DesktopIntegrationService>())
+              if (Platform.isMacOS && desktop != null)
                 _actionRow(
                   'settingsRecoverProxy',
                   AppIcons.shield,
                   !active
                       ? () => _maintenance(
                           context,
-                          Get.find<DesktopIntegrationService>()
-                              .recoverSystemProxy,
+                          desktop.recoverSystemProxy,
                           confirm: 'settingsRecoverProxyHint',
                         )
                       : null,
@@ -217,7 +215,13 @@ extension _SettingsFeatures on _SettingsViewState {
         ),
         if (core.error.value case final error?) ...[
           const SizedBox(height: 16),
-          _errorPanel(error),
+          _errorPanel(
+            error,
+            categoryKey: core.errorCategoryLabel,
+            recovering: core.recovering.value,
+            recoveryAttempt: core.recoveryAttempt.value,
+            recoveryExhausted: core.recoveryExhausted.value,
+          ),
         ],
         _hint('settingsKernelHint'),
       ],
@@ -244,16 +248,35 @@ extension _SettingsFeatures on _SettingsViewState {
         : null,
   );
 
-  Widget _errorPanel(String error) => AppCard(
+  Widget _errorPanel(
+    String error, {
+    String? categoryKey,
+    bool recovering = false,
+    int recoveryAttempt = 0,
+    bool recoveryExhausted = false,
+  }) => AppCard(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'settingsLastError'.tr,
+          (categoryKey ?? 'settingsLastError').tr,
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
         const SizedBox(height: 8),
         SelectableText(AppMessage.formatError(error)),
+        if (recovering) ...[
+          const SizedBox(height: 8),
+          Text(
+            'coreRecoveryAttempt'.trParams({
+              'attempt': '$recoveryAttempt',
+              'max': '3',
+            }),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ] else if (recoveryExhausted) ...[
+          const SizedBox(height: 8),
+          Text('coreRecoveryStopped'.tr),
+        ],
       ],
     ),
   );
@@ -284,18 +307,10 @@ extension _SettingsFeatures on _SettingsViewState {
   }
 
   Widget _privacy(BuildContext context) {
-    final traffic = Get.isRegistered<TrafficStatisticsService>()
-        ? Get.find<TrafficStatisticsService>()
-        : null;
-    final timeline = Get.isRegistered<NetworkTimelineService>()
-        ? Get.find<NetworkTimelineService>()
-        : null;
-    final quality = Get.isRegistered<NodeQualityService>()
-        ? Get.find<NodeQualityService>()
-        : null;
-    final health = Get.isRegistered<HealthHistoryService>()
-        ? Get.find<HealthHistoryService>()
-        : null;
+    final traffic = dependencies.trafficStatistics;
+    final timeline = dependencies.timeline;
+    final quality = dependencies.nodeQuality;
+    final health = dependencies.healthHistory;
     // These histories expose revision counters rather than mutable collections.
     traffic?.revision.value;
     quality?.revision.value;
@@ -393,10 +408,10 @@ extension _SettingsFeatures on _SettingsViewState {
   );
 
   Widget _updates(BuildContext context) {
-    if (!Get.isRegistered<UpdateService>()) {
+    final updates = dependencies.updates;
+    if (updates == null) {
       return _hint('settingsServiceUnavailable');
     }
-    final updates = Get.find<UpdateService>();
     final latest = updates.release.value;
     final checked = updates.checkedAt.value;
     final current = updates.currentVersion.value;

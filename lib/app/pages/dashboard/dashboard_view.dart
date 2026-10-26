@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../configs/theme/app_theme.dart';
-import '../../../services/diagnostic_report_service.dart';
-import '../../../services/health_history_service.dart';
-import '../../../services/network_timeline_service.dart';
-import '../../../services/traffic_statistics_service.dart';
 import '../../widgets/app_widgets.dart';
 import '../tools/network_health_history_view.dart';
 import '../tools/network_health_view.dart';
@@ -13,6 +9,7 @@ import '../tools/network_timeline_view.dart';
 import '../tools/traffic_statistics_view.dart';
 import '../workspace/workspace_controller.dart';
 import 'dashboard_controller.dart';
+import 'dashboard_dependencies.dart';
 import 'dashboard_layout_view.dart';
 import 'widgets/dashboard_insights.dart';
 import 'widgets/dashboard_summary.dart';
@@ -22,7 +19,59 @@ import 'widgets/status_card.dart';
 import 'widgets/traffic_card.dart';
 
 class DashboardView extends GetView<DashboardController> {
-  const DashboardView({super.key});
+  const DashboardView({
+    super.key,
+    this.dependencies,
+    this.onOpenSettings,
+    this.onOpenProfiles,
+    this.onOpenProxies,
+    this.onOpenConnections,
+  });
+
+  final DashboardDependencies? dependencies;
+  final void Function(BuildContext context)? onOpenSettings;
+  final VoidCallback? onOpenProfiles;
+  final VoidCallback? onOpenProxies;
+  final VoidCallback? onOpenConnections;
+
+  DashboardDependencies get _dependencies =>
+      dependencies ?? DashboardDependencies.fromController(controller);
+
+  void _openSettings(BuildContext context) {
+    final callback = onOpenSettings;
+    if (callback != null) {
+      callback(context);
+    } else {
+      Get.find<WorkspaceController>().openSettings(context);
+    }
+  }
+
+  void _openProfiles() {
+    final callback = onOpenProfiles;
+    if (callback != null) {
+      callback();
+    } else {
+      Get.find<WorkspaceController>().select(2);
+    }
+  }
+
+  void _openProxies() {
+    final callback = onOpenProxies;
+    if (callback != null) {
+      callback();
+    } else {
+      Get.find<WorkspaceController>().select(1);
+    }
+  }
+
+  void _openConnections() {
+    final callback = onOpenConnections;
+    if (callback != null) {
+      callback();
+    } else {
+      Get.find<WorkspaceController>().select(3);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => AppPage(
@@ -37,7 +86,10 @@ class DashboardView extends GetView<DashboardController> {
         ),
         tooltip: 'dashboardLayout'.tr,
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const DashboardLayoutView()),
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                DashboardLayoutView(settings: _dependencies.settings),
+          ),
         ),
         icon: const AppIcon(AppIcons.dashboardLayout),
       ),
@@ -48,7 +100,7 @@ class DashboardView extends GetView<DashboardController> {
           backgroundColor: Colors.transparent,
         ),
         tooltip: 'settings'.tr,
-        onPressed: () => Get.find<WorkspaceController>().openSettings(context),
+        onPressed: () => _openSettings(context),
         icon: const AppIcon(AppIcons.settings),
       ),
     ],
@@ -84,7 +136,11 @@ class DashboardView extends GetView<DashboardController> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(
-                      child: StatusCard(controller: controller, compact: false),
+                      child: StatusCard(
+                        controller: controller,
+                        compact: false,
+                        onOpenProfiles: _openProfiles,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(child: speeds()),
@@ -93,7 +149,11 @@ class DashboardView extends GetView<DashboardController> {
               )
             : Column(
                 children: [
-                  StatusCard(controller: controller, compact: true),
+                  StatusCard(
+                    controller: controller,
+                    compact: true,
+                    onOpenProfiles: _openProfiles,
+                  ),
                   const SizedBox(height: 16),
                   speeds(),
                 ],
@@ -127,17 +187,14 @@ class DashboardView extends GetView<DashboardController> {
                         key: ValueKey(sections.join(':')),
                         controller: controller,
                         sections: sections,
-                        onOpenProfiles: () =>
-                            Get.find<WorkspaceController>().select(2),
+                        onOpenProfiles: _openProfiles,
                       )
                     : DashboardNetworkOverview(
                         key: ValueKey(sections.join(':')),
                         controller: controller,
                         sections: sections,
-                        onOpenGroups: () =>
-                            Get.find<WorkspaceController>().select(1),
-                        onOpenConnections: () =>
-                            Get.find<WorkspaceController>().select(3),
+                        onOpenGroups: _openProxies,
+                        onOpenConnections: _openConnections,
                       ),
               );
             } else if (insights.contains(key)) {
@@ -147,15 +204,9 @@ class DashboardView extends GetView<DashboardController> {
                   keys[i + 1] == 'todayTraffic') {
                 sections.add(keys[++i]);
               }
-              final history = Get.isRegistered<HealthHistoryService>()
-                  ? Get.find<HealthHistoryService>()
-                  : null;
-              final traffic = Get.isRegistered<TrafficStatisticsService>()
-                  ? Get.find<TrafficStatisticsService>()
-                  : null;
-              final timeline = Get.isRegistered<NetworkTimelineService>()
-                  ? Get.find<NetworkTimelineService>()
-                  : null;
+              final history = _dependencies.healthHistory;
+              final traffic = _dependencies.trafficStatistics;
+              final timeline = _dependencies.timeline;
               children.add(
                 DashboardInsightPair(
                   key: ValueKey(sections.join(':')),
@@ -195,18 +246,13 @@ class DashboardView extends GetView<DashboardController> {
                           timeline: timeline,
                           onOpen:
                               timeline == null ||
-                                  !Get.isRegistered<DiagnosticReportService>()
+                                  _dependencies.diagnostics == null
                               ? null
                               : () => Navigator.of(context).push(
                                   MaterialPageRoute<void>(
                                     builder: (_) => NetworkTimelineView(
                                       timeline: timeline,
-                                      report:
-                                          Get.isRegistered<
-                                            DiagnosticReportService
-                                          >()
-                                          ? Get.find<DiagnosticReportService>()
-                                          : null,
+                                      report: _dependencies.diagnostics,
                                     ),
                                   ),
                                 ),
@@ -338,7 +384,7 @@ class DashboardView extends GetView<DashboardController> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             for (var i = 0; i < operations.length; i++) ...[
-                              if (i > 0) const Divider(height: 12),
+                              if (i > 0) const SizedBox(height: 8),
                               operations[i],
                             ],
                           ],
