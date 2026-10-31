@@ -58,6 +58,7 @@ abstract final class AppIcons {
   static const memory = Icons.memory_rounded;
   static const notifications = Icons.notifications_none_outlined;
   static const navigation = Icons.near_me_outlined;
+  static const locate = Icons.my_location_outlined;
   static const externalLink = Icons.open_in_new_rounded;
   static const palette = Icons.palette_outlined;
   static const pause = Icons.pause_rounded;

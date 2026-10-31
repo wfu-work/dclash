@@ -121,6 +121,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('proxy toolbar locates a selected node outside the viewport', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1100, 800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final controller = Get.find<ProxiesController>();
+    controller.core.status.value = CoreStatus.running;
+    final nodes = [
+      for (var index = 0; index < 30; index++)
+        ProxyNode(name: 'Node $index', type: 'VLESS'),
+    ];
+    controller.core.groups.add(
+      ProxyGroup(
+        name: 'Proxy',
+        type: 'Selector',
+        selected: 'Node 29',
+        nodes: nodes,
+      ),
+    );
+    await tester.pumpWidget(app(const ProxiesView()));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('proxyProtocol_Node 29')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('proxyLocateSelectedAction')));
+    await tester.pumpAndSettle();
+
+    final protocol = find.byKey(const ValueKey('proxyProtocol_Node 29'));
+    expect(protocol, findsOneWidget);
+    final viewport = tester.getRect(find.byType(GridView));
+    final nodeRect = tester.getRect(protocol);
+    expect(nodeRect.top, greaterThanOrEqualTo(viewport.top));
+    expect(nodeRect.bottom, lessThanOrEqualTo(viewport.bottom));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('proxy group toolbar fits on a small screen', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));

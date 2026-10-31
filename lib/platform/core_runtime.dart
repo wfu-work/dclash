@@ -46,6 +46,7 @@ class DesktopCoreRuntime implements CoreRuntime {
   int? _proxyPort;
   bool _closing = false;
   bool _cancelled = false;
+  bool _processExitReported = false;
   Completer<void>? _connecting;
   HelperClient? _helper;
   String? _session;
@@ -77,6 +78,9 @@ class DesktopCoreRuntime implements CoreRuntime {
 
   @override
   Future<void> open(String homeDirectory, Map<String, dynamic> fields) async {
+    _closing = false;
+    _cancelled = false;
+    _processExitReported = false;
     _proxyPort = (fields['mixedPort'] as num?)?.toInt() ?? 7890;
     if (!await File(corePath).exists()) {
       throw const CoreException(
@@ -120,7 +124,8 @@ class DesktopCoreRuntime implements CoreRuntime {
             );
             rpc.fail(failure);
             if (!connected.isCompleted) connected.completeError(failure);
-            if (!_closing) {
+            if (!_closing && !_processExitReported) {
+              _processExitReported = true;
               _events.add({'type': 'crash', 'data': failure.toString()});
             }
         }
@@ -163,6 +168,12 @@ class DesktopCoreRuntime implements CoreRuntime {
                 'Core exited before connecting ($code)',
               ),
             );
+          } else if (!_closing && !_processExitReported) {
+            _processExitReported = true;
+            _events.add({
+              'type': 'crash',
+              'data': 'Core process exited ($code)',
+            });
           }
         }),
       );

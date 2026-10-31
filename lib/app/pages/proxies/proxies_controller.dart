@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../domains/proxy_group.dart';
@@ -20,6 +23,9 @@ class ProxiesController extends GetxController {
   final previewGroups = <ProxyGroup>[].obs;
   final previewLoading = false.obs;
   final _workers = <Worker>[];
+  final _scrollControllers = <String, ScrollController>{};
+  final _nodeKeys = <String, Map<String, GlobalKey>>{};
+  final _gridColumns = <String, int>{};
   int _previewRevision = 0;
 
   @override
@@ -37,8 +43,28 @@ class ProxiesController extends GetxController {
     for (final worker in _workers) {
       worker.dispose();
     }
+    for (final controller in _scrollControllers.values) {
+      controller.dispose();
+    }
+    _scrollControllers.clear();
+    _nodeKeys.clear();
+    _gridColumns.clear();
     super.onClose();
   }
+
+  ScrollController scrollControllerFor(String groupName) =>
+      _scrollControllers.putIfAbsent(groupName, ScrollController.new);
+
+  GlobalKey nodeKeyFor(String groupName, String nodeName) => _nodeKeys
+      .putIfAbsent(groupName, () => <String, GlobalKey>{})
+      .putIfAbsent(nodeName, GlobalKey.new);
+
+  void setGridColumns(String groupName, int columns) {
+    _gridColumns[groupName] = columns;
+  }
+
+  int gridColumnsFor(String groupName, int fallback) =>
+      _gridColumns[groupName] ?? fallback;
 
   List<ProxyGroup> get groups {
     // Preview builds may provide groups without an active profile. An active
@@ -66,7 +92,12 @@ class ProxiesController extends GetxController {
     try {
       final content = await core.profiles.readContent(profile);
       if (revision != _previewRevision) return;
-      previewGroups.assignAll(_parsePreviewGroups(parseConfig(content)));
+      previewGroups.assignAll(
+        _parsePreviewGroups(
+          parseConfig(content),
+          _savedProxySelections(profile.id),
+        ),
+      );
     } catch (_) {
       // The profile editor and subscription updater surface their own errors.
       // A malformed or temporarily unavailable profile should leave the proxy
@@ -178,7 +209,27 @@ class ProxiesController extends GetxController {
     }
   }
 
-  List<ProxyGroup> _parsePreviewGroups(Map<String, dynamic> config) {
+  Map<String, String> _savedProxySelections(String profileId) {
+    final raw = settings.fields['proxySelections'];
+    if (raw is! String || raw.trim().isEmpty) return <String, String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      final profile = decoded is Map ? decoded[profileId] : null;
+      if (profile is! Map) return <String, String>{};
+      return {
+        for (final entry in profile.entries)
+          if (entry.key is String && entry.value is String)
+            entry.key as String: entry.value as String,
+      };
+    } on Object {
+      return <String, String>{};
+    }
+  }
+
+  List<ProxyGroup> _parsePreviewGroups(
+    Map<String, dynamic> config,
+    Map<String, String> savedSelections,
+  ) {
     final nodesByName = <String, ProxyNode>{};
     for (final raw in config['proxies'] as List? ?? const []) {
       if (raw is! Map || raw['name'] is! String || raw['type'] is! String) {
@@ -219,7 +270,10 @@ class ProxiesController extends GetxController {
               ),
         );
       }
-      final selected = raw['now'] is String && (raw['now'] as String).isNotEmpty
+      final saved = savedSelections[name];
+      final selected = saved != null && nodes.any((node) => node.name == saved)
+          ? saved
+          : raw['now'] is String && (raw['now'] as String).isNotEmpty
           ? raw['now'] as String
           : nodes.firstOrNull?.name ?? '';
       result.add(

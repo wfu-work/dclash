@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:dclash_flutter/domains/clash_profile.dart';
 import 'package:dclash_flutter/domains/core_status.dart';
@@ -43,6 +44,7 @@ class TestRuntime implements CoreRuntime {
     'runtimeOther': 1024 * 1024,
   };
   String setupMessage = '';
+  Map<String, dynamic>? setupArguments;
   bool failTrafficBaseline = false;
   bool crashOnStart = false;
   Map<String, dynamic> trafficTotals = {'up': 0, 'down': 0};
@@ -97,6 +99,9 @@ class TestRuntime implements CoreRuntime {
     if (method == 'updateConfig') {
       modeUpdates.add((arguments as Map)['mode'] as String);
       if (updateError != null) throw updateError!;
+    }
+    if (method == 'setupConfig' && arguments is Map) {
+      setupArguments = Map<String, dynamic>.from(arguments);
     }
     return switch (method) {
       'getProxies' => {'proxies': {}, 'all': []},
@@ -297,6 +302,26 @@ void main() {
       expect(service.error.value, isNull);
     },
   );
+  test('proxy selections persist and restore for the active profile', () async {
+    final runtimes = [TestRuntime(), TestRuntime()];
+    var creations = 0;
+    final profiles = TestProfiles();
+    final service = CoreService(
+      profiles,
+      settings,
+      runtimeFactory: () => runtimes[creations++],
+      supportDirectory: () async => directory,
+    );
+    await service.initialize();
+    await service.start();
+    await service.selectProxy('GLOBAL', 'Tokyo');
+    final saved = jsonDecode(settings.fields['proxySelections'] as String);
+    expect(saved['fixture']['GLOBAL'], 'Tokyo');
+    await service.stop();
+    await service.start();
+    expect(runtimes[1].setupArguments?['selected-map'], {'GLOBAL': 'Tokyo'});
+    await service.disposeRuntime();
+  });
   test(
     'runtime polling prefers the core process RSS for memory usage',
     () async {
@@ -647,33 +672,67 @@ void main() {
     expect(replacement.calls, contains('open'));
     await service.disposeRuntime();
   });
-  test('repeated native crashes stop after the bounded recovery attempts', () async {
-    final runtimes = [
-      for (var i = 0; i < 4; i++) TestRuntime()..crashOnStart = true,
-    ];
-    var creations = 0;
-    final service = CoreService(
-      TestProfiles(),
-      settings,
-      runtimeFactory: () => runtimes[creations++],
-      supportDirectory: () async => directory,
-      recoveryBaseDelay: const Duration(milliseconds: 1),
-    );
-    await service.start();
-    final deadline = DateTime.now().add(const Duration(seconds: 2));
-    while (!service.recoveryExhausted.value &&
-        DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 5));
-    }
-    expect(service.recoveryExhausted.value, isTrue);
-    expect(service.recoveryAttempt.value, 3);
-    expect(service.status.value, CoreStatus.failed);
-    expect(creations, 4);
-    for (final runtime in runtimes) {
-      expect(runtime.controller.isClosed, isTrue);
-    }
-    await service.disposeRuntime();
-  });
+  test(
+    'a core exit before the IPC handshake enters automatic recovery',
+    () async {
+      final failed = TestRuntime()
+        ..openError = const CoreException(
+          'process_exit',
+          'Core exited before connecting (1)',
+        );
+      final replacement = TestRuntime();
+      var creations = 0;
+      final service = CoreService(
+        TestProfiles(),
+        settings,
+        runtimeFactory: () => creations++ == 0 ? failed : replacement,
+        supportDirectory: () async => directory,
+        recoveryBaseDelay: const Duration(milliseconds: 1),
+      );
+      await service.initialize();
+      await expectLater(service.start(), throwsA(isA<CoreException>()));
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (service.status.value != CoreStatus.running &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(service.status.value, CoreStatus.running);
+      expect(service.recoveryAttempt.value, 1);
+      expect(replacement.calls, contains('open'));
+      expect(failed.controller.isClosed, isTrue);
+      await service.disposeRuntime();
+    },
+  );
+  test(
+    'repeated native crashes stop after the bounded recovery attempts',
+    () async {
+      final runtimes = [
+        for (var i = 0; i < 4; i++) TestRuntime()..crashOnStart = true,
+      ];
+      var creations = 0;
+      final service = CoreService(
+        TestProfiles(),
+        settings,
+        runtimeFactory: () => runtimes[creations++],
+        supportDirectory: () async => directory,
+        recoveryBaseDelay: const Duration(milliseconds: 1),
+      );
+      await service.start();
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (!service.recoveryExhausted.value &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(service.recoveryExhausted.value, isTrue);
+      expect(service.recoveryAttempt.value, 3);
+      expect(service.status.value, CoreStatus.failed);
+      expect(creations, 4);
+      for (final runtime in runtimes) {
+        expect(runtime.controller.isClosed, isTrue);
+      }
+      await service.disposeRuntime();
+    },
+  );
   test(
     'an active profile content revision reapplies without an id change',
     () async {

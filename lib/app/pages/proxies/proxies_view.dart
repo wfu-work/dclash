@@ -133,7 +133,7 @@ class ProxiesView extends GetView<ProxiesController> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _groupHeader(context, group),
+                _groupHeader(context, group, nodes, grid),
                 const SizedBox(height: 12),
                 if (expanded)
                   Expanded(child: _nodes(context, group, nodes, grid))
@@ -250,7 +250,12 @@ class ProxiesView extends GetView<ProxiesController> {
     );
   });
 
-  Widget _groupHeader(BuildContext context, ProxyGroup group) => AppCard(
+  Widget _groupHeader(
+    BuildContext context,
+    ProxyGroup group,
+    List<ProxyNode> nodes,
+    bool grid,
+  ) => AppCard(
     padding: EdgeInsets.zero,
     child: Padding(
       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
@@ -333,7 +338,7 @@ class ProxiesView extends GetView<ProxiesController> {
                   ),
                   child: selected,
                 ),
-              _groupToolbar(context, group),
+              _groupToolbar(context, group, nodes, grid),
             ],
           );
           final heading =
@@ -360,16 +365,26 @@ class ProxiesView extends GetView<ProxiesController> {
     ),
   );
 
-  Widget _groupToolbar(BuildContext context, ProxyGroup group) => Obx(() {
+  Widget _groupToolbar(
+    BuildContext context,
+    ProxyGroup group,
+    List<ProxyNode> nodes,
+    bool grid,
+  ) => Obx(() {
     final testing = controller.testingGroups.contains(group.name);
     final expanded = controller.isExpanded(group);
     final hideUnavailable = controller.hideUnavailable;
-    final grid = controller.grid.value;
+    final toolbarButtonStyle = IconButton.styleFrom(
+      minimumSize: const Size(40, 40),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     return Wrap(
       alignment: WrapAlignment.end,
       spacing: 2,
       children: [
         IconButton(
+          style: toolbarButtonStyle,
           tooltip: 'proxyGroupTest'.tr,
           onPressed: testing
               ? null
@@ -386,7 +401,21 @@ class ProxiesView extends GetView<ProxiesController> {
                 )
               : const AppIcon(AppIcons.gauge, size: 19),
         ),
+        IconButton(
+          style: toolbarButtonStyle,
+          key: const ValueKey('proxyLocateSelectedAction'),
+          tooltip: 'proxyLocateSelected'.tr,
+          onPressed: group.selected.isEmpty
+              ? null
+              : () => _run(
+                  context,
+                  () => _locateSelected(context, group, nodes, grid),
+                ),
+          icon: const AppIcon(AppIcons.locate, size: 19),
+        ),
         PopupMenuButton<String>(
+          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+          padding: EdgeInsets.zero,
           tooltip: '${'featureSort'.tr} · ${'proxySort_${controller.sort}'.tr}',
           initialValue: controller.sort,
           onSelected: (value) => _run(context, () => controller.setSort(value)),
@@ -402,6 +431,7 @@ class ProxiesView extends GetView<ProxiesController> {
           icon: const AppIcon(AppIcons.sort, size: 19),
         ),
         IconButton(
+          style: toolbarButtonStyle,
           tooltip: 'proxyHideUnavailable'.tr,
           isSelected: hideUnavailable,
           onPressed: () => _run(
@@ -412,11 +442,13 @@ class ProxiesView extends GetView<ProxiesController> {
           selectedIcon: const AppIcon(AppIcons.filter, size: 19),
         ),
         IconButton(
+          style: toolbarButtonStyle,
           tooltip: grid ? 'proxyList'.tr : 'proxyGrid'.tr,
           onPressed: () => _run(context, controller.toggleLayout),
           icon: AppIcon(grid ? AppIcons.list : AppIcons.grid, size: 19),
         ),
         IconButton(
+          style: toolbarButtonStyle,
           tooltip: expanded ? 'proxyCollapse'.tr : 'proxyExpand'.tr,
           onPressed: () => controller.toggleGroup(group),
           icon: AppIcon(
@@ -427,6 +459,57 @@ class ProxiesView extends GetView<ProxiesController> {
       ],
     );
   });
+
+  Future<void> _locateSelected(
+    BuildContext context,
+    ProxyGroup group,
+    List<ProxyNode> nodes,
+    bool grid,
+  ) async {
+    final index = nodes.indexWhere((node) => node.name == group.selected);
+    if (index < 0) throw StateError('proxySelectedHidden'.tr);
+
+    final key = controller.nodeKeyFor(group.name, group.selected);
+    final currentContext = key.currentContext;
+    if (currentContext != null) {
+      await Scrollable.ensureVisible(
+        currentContext,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: .35,
+      );
+      return;
+    }
+
+    final scroll = controller.scrollControllerFor(group.name);
+    if (!scroll.hasClients) return;
+    final columns = grid ? controller.gridColumnsFor(group.name, 1) : 1;
+    final row = grid ? index ~/ columns : index;
+    final extent = grid
+        ? ProxyNodeTile.gridMainAxisExtent(context)
+        : ProxyNodeTile.compactMainAxisExtent(context);
+    final spacing = grid ? 12.0 : 8.0;
+    final target = (row * (extent + spacing)).clamp(
+      0.0,
+      scroll.position.maxScrollExtent,
+    );
+    await scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) return;
+    final builtContext = key.currentContext;
+    if (builtContext != null) {
+      await Scrollable.ensureVisible(
+        builtContext,
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOutCubic,
+        alignment: .35,
+      );
+    }
+  }
 
   Widget _nodes(
     BuildContext context,
@@ -443,6 +526,11 @@ class ProxiesView extends GetView<ProxiesController> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
+        final columns = grid
+            ? (constraints.maxWidth / 300).floor().clamp(1, 5)
+            : 1;
+        controller.setGridColumns(group.name, columns);
+
         Widget tile(int index) {
           final node = nodes[index];
           return Obx(
@@ -467,21 +555,26 @@ class ProxiesView extends GetView<ProxiesController> {
 
         return grid
             ? GridView.builder(
+                controller: controller.scrollControllerFor(group.name),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: (constraints.maxWidth / 300).floor().clamp(
-                    1,
-                    5,
-                  ),
+                  crossAxisCount: columns,
                   mainAxisExtent: ProxyNodeTile.gridMainAxisExtent(context),
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
                 itemCount: nodes.length,
-                itemBuilder: (_, index) => tile(index),
+                itemBuilder: (_, index) => KeyedSubtree(
+                  key: controller.nodeKeyFor(group.name, nodes[index].name),
+                  child: tile(index),
+                ),
               )
             : ListView.separated(
+                controller: controller.scrollControllerFor(group.name),
                 itemCount: nodes.length,
-                itemBuilder: (_, index) => tile(index),
+                itemBuilder: (_, index) => KeyedSubtree(
+                  key: controller.nodeKeyFor(group.name, nodes[index].name),
+                  child: tile(index),
+                ),
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
               );
       },

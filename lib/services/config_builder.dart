@@ -76,6 +76,13 @@ class ConfigBuilder {
   static String _applyManagedSettings(Map<String, dynamic> request) {
     final config = request['config'] as Map<String, dynamic>;
     final fields = request['fields'] as Map<String, dynamic>;
+    // Selection persistence is managed by the desktop client. Keep the core's
+    // own cache enabled as well so changes made through the tray or controller
+    // remain available when the app is restarted.
+    config['profile'] = {
+      ...?config['profile'] as Map<String, dynamic>?,
+      'store-selected': true,
+    };
     for (final entry in {
       'dns': 'dnsOverride',
       'tun': 'tunOverride',

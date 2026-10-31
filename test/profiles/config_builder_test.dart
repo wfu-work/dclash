@@ -96,6 +96,15 @@ tun: {enable: true, stack: system}
       expect(result['tun']['enable'], false);
     },
   );
+  test('managed runtime enables proxy selection persistence', () async {
+    final result = loadYaml(
+      await ConfigBuilder.build(
+        'profile: {store-selected: false}\nproxies: []',
+        const {},
+      ),
+    );
+    expect(result['profile']['store-selected'], true);
+  });
   test('provider file paths cannot escape app storage', () async {
     expect(
       () => ConfigBuilder.build(

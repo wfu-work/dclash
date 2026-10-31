@@ -90,6 +90,7 @@ class CoreService extends GetxService
   Timer? _pollTimer;
   Timer? _recoveryTimer, _recoveryStableTimer;
   Worker? _settingsWorker, _profileWorker, _profileContentWorker;
+  Future<void> _selectionWrites = Future.value();
   String _observedProfile = '';
   bool _initialized = false;
   bool _polling = false;
@@ -146,7 +147,7 @@ class CoreService extends GetxService
   }
 
   @override
-  Future<void> start() {
+  Future<void> start() async {
     _cancelRecovery(resetAttempt: true);
     if (_maintenance) {
       return Future.error(
@@ -164,7 +165,12 @@ class CoreService extends GetxService
         ),
       );
     }
-    return _lifecycle.request(true);
+    try {
+      await _lifecycle.request(true);
+    } catch (error) {
+      await _handleStartFailure(error);
+      rethrow;
+    }
   }
 
   @override
@@ -301,7 +307,7 @@ class CoreService extends GetxService
       await writePrivateText(File(p.join(home.path, 'config.yaml')), content);
       _messageResult(
         await runtime.invoke('setupConfig', {
-          'selected-map': <String, String>{},
+          'selected-map': _savedProxySelections(profile.id),
           'test-url':
               fields['testUrl'] ?? 'https://www.gstatic.com/generate_204',
         }),
@@ -448,10 +454,50 @@ class CoreService extends GetxService
     await start();
   }
 
+  /// A desktop process can exit before its IPC handshake completes (for
+  /// example while the host is entering or leaving sleep). Treat that as a
+  /// recoverable start failure after returning the lifecycle intent to the
+  /// stopped state. Recovery attempts that are already in progress handle
+  /// their own retry bookkeeping in [_runRecovery].
+  Future<void> _handleStartFailure(Object error) async {
+    if (preview ||
+        _maintenance ||
+        !_lifecycle.desired ||
+        recovering.value ||
+        _isNonRecoverable(error)) {
+      return;
+    }
+    try {
+      await _lifecycle.request(false);
+    } catch (cleanup) {
+      _recordError(cleanup);
+      return;
+    }
+    if (_lifecycle.desired) return;
+    status.value = CoreStatus.failed;
+    _scheduleRecovery();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (Platform.isAndroid || Platform.isIOS) {
-      setForeground(state == AppLifecycleState.resumed);
+    final foreground = state == AppLifecycleState.resumed;
+    setForeground(foreground);
+    if (foreground) unawaited(_reconcileAfterResume());
+  }
+
+  Future<void> _reconcileAfterResume() async {
+    if (preview ||
+        _maintenance ||
+        !_lifecycle.desired ||
+        running ||
+        recovering.value ||
+        recoveryExhausted.value) {
+      return;
+    }
+    try {
+      await _lifecycle.request(true);
+    } catch (error) {
+      await _handleStartFailure(error);
     }
   }
 
@@ -737,7 +783,78 @@ class CoreService extends GetxService
       await invoke('changeProxy', {'group-name': group, 'proxy-name': name}),
     );
     _messageResult(response['message']);
+    await _rememberProxySelection(group, name);
     await refreshRuntime();
+  }
+
+  Map<String, String> _savedProxySelections(String profileId) {
+    final raw = settings.fields['proxySelections'];
+    if (raw is! String || raw.trim().isEmpty) return <String, String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, String>{};
+      final profile = decoded[profileId];
+      if (profile is! Map) return <String, String>{};
+      return {
+        for (final entry in profile.entries)
+          if (entry.key is String && entry.value is String)
+            entry.key as String: entry.value as String,
+      };
+    } on Object {
+      return <String, String>{};
+    }
+  }
+
+  Future<void> _rememberProxySelection(String group, String name) async {
+    final profileId = profiles.active?.id;
+    if (profileId == null || group.isEmpty || name.isEmpty) return;
+    final write = _selectionWrites.then(
+      (_) => _persistProxySelection(profileId, group, name),
+    );
+    _selectionWrites = write.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    await write;
+  }
+
+  Future<void> _persistProxySelection(
+    String profileId,
+    String group,
+    String name,
+  ) async {
+    final raw = settings.fields['proxySelections'];
+    final all = <String, dynamic>{};
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is String && entry.value is Map) {
+              all[entry.key as String] = {
+                for (final item in (entry.value as Map).entries)
+                  if (item.key is String && item.value is String)
+                    item.key as String: item.value as String,
+              };
+            }
+          }
+        }
+      } on Object {
+        // A malformed legacy value is replaced by the new valid selection.
+      }
+    }
+    final selected = Map<String, dynamic>.from(
+      all[profileId] as Map? ?? const <String, dynamic>{},
+    );
+    selected[group] = name;
+    all[profileId] = selected;
+    try {
+      await settings.set('proxySelections', jsonEncode(all));
+    } catch (error) {
+      // Selection already changed in the running core. Keep the UI usable and
+      // surface persistence failures through the normal core error channel.
+      _recordError(error);
+    }
   }
 
   @override

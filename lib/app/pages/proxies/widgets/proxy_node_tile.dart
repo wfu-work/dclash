@@ -60,6 +60,31 @@ class ProxyNodeTile extends StatelessWidget {
         .ceilToDouble();
   }
 
+  static double compactMainAxisExtent(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final textScaler = MediaQuery.textScalerOf(context);
+    double textHeight(TextStyle? style) {
+      final painter = TextPainter(
+        text: TextSpan(text: 'Ag', style: style),
+        textDirection: Directionality.of(context),
+        textScaler: textScaler,
+      )..layout();
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    return (const EdgeInsets.all(14).vertical +
+            textHeight(
+              textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+            ) +
+            _protocolGap +
+            _protocolPadding.vertical +
+            textHeight(textTheme.labelSmall) +
+            8)
+        .ceilToDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

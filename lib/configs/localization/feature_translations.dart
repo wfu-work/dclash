@@ -38,6 +38,9 @@ abstract final class FeatureTranslations {
     'proxySort_delay': 'Latency',
     'proxyHideUnavailable': 'Hide unavailable proxies',
     'proxyGroupTest': 'Test this group',
+    'proxyLocateSelected': 'Locate selected proxy',
+    'proxySelectedHidden':
+        'The selected proxy is hidden by the current search or filter.',
     'proxyExpand': 'Expand proxy group',
     'proxyCollapse': 'Collapse proxy group',
     'proxyGroupCollapsed': 'Proxy group collapsed',
@@ -315,6 +318,8 @@ abstract final class FeatureTranslations {
     'proxySort_delay': '延迟',
     'proxyHideUnavailable': '隐藏不可用节点',
     'proxyGroupTest': '测试本组延迟',
+    'proxyLocateSelected': '定位当前节点',
+    'proxySelectedHidden': '当前节点被搜索或过滤条件隐藏。',
     'proxyExpand': '展开代理组',
     'proxyCollapse': '收起代理组',
     'proxyGroupCollapsed': '代理组已收起',

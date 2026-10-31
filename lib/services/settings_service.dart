@@ -61,6 +61,10 @@ class SettingsService extends GetxService {
     'proxySort': 'default',
     'proxyLayout': 'grid',
     'hideUnavailable': false,
+    // Selected proxy nodes are stored by profile id and proxy group name.
+    // The JSON string keeps the settings schema backward compatible while
+    // allowing selections to be restored before the native core starts.
+    'proxySelections': '{}',
     // Connections start automatically when an active profile is available.
     // Users can disable this in Startup & Window settings.
     'autoStart': true,
