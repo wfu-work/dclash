@@ -19,6 +19,8 @@ use std::io::{BufRead, Error, Read};
 use std::os::windows::fs::OpenOptionsExt;
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Mutex, MutexGuard};
@@ -36,6 +38,8 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 #[cfg(not(any(
     all(feature = "windows-service", target_os = "windows"),
@@ -50,7 +54,7 @@ const CORE_SOCKET_PREFIX: &str = "/tmp/DClashSocket_";
 const CORE_SOCKET_SUFFIX: &str = ".sock";
 const PROTOCOL_VERSION_HEADER: &str = "x-dclash-helper-protocol";
 #[cfg(windows)]
-const PROTOCOL_VERSION: &str = "8";
+const PROTOCOL_VERSION: &str = "9";
 #[cfg(not(windows))]
 const PROTOCOL_VERSION: &str = "6";
 const EXPECTED_CORE_SHA256: &str = env!("CORE_SHA256");
@@ -66,6 +70,11 @@ pub struct StartParams {
     pub address: String,
     #[serde(rename = "sessionId")]
     pub session_id: String,
+    // The desktop process owns the Core lease.  Keeping its PID lets the
+    // privileged helper stop the Core when the UI is killed or crashes before
+    // it can send the normal /stop request.
+    #[serde(rename = "ownerPid", default)]
+    pub owner_pid: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -132,14 +141,19 @@ impl ManagedCore {
     }
 
     fn terminate(&mut self) -> Result<(), Error> {
-        if self.request_exit() && self.wait_for_exit(CORE_GRACEFUL_EXIT_TIMEOUT)? {
-            return Ok(());
+        let exited = self.request_exit() && self.wait_for_exit(CORE_GRACEFUL_EXIT_TIMEOUT)?;
+        let exited = if exited {
+            true
+        } else {
+            let _ = self.child.kill();
+            self.wait_for_exit(CORE_EXIT_TIMEOUT)?
+        };
+        if !exited {
+            return Err(Error::other("Core did not exit after termination"));
         }
-        let _ = self.child.kill();
-        if self.wait_for_exit(CORE_EXIT_TIMEOUT)? {
-            return Ok(());
-        }
-        Err(Error::other("Core did not exit after termination"))
+        #[cfg(windows)]
+        cleanup_windows_tun().map_err(|error| Error::other(error.to_string()))?;
+        Ok(())
     }
 
     fn wait_for_exit(&mut self, timeout: Duration) -> Result<bool, Error> {
@@ -166,6 +180,61 @@ impl ManagedCore {
     #[cfg(not(target_os = "linux"))]
     fn request_exit(&mut self) -> bool {
         false
+    }
+}
+
+/// The Windows sing-tun backend configures the adapter's routes, addresses,
+/// DNS and forwarding flags, but those settings can survive a hard process
+/// termination.  The Helper is the last process that can reliably clean them
+/// after it has reaped the Core, so keep this cleanup in the privileged path.
+/// `Meta*` is retained as a migration target for adapters created by older
+/// DClash builds before the dedicated `DClash*` prefix was introduced.
+#[cfg(windows)]
+fn cleanup_windows_tun() -> io::Result<()> {
+    const SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+$allAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+$hasDclashAdapter = @($allAdapters | Where-Object { $_.Name -like 'DClash*' }).Count -gt 0
+$adapters = @($allAdapters | Where-Object {
+  $_.Name -like 'DClash*' -or
+  (-not $hasDclashAdapter -and $_.Name -like 'Meta*')
+})
+foreach ($adapter in $adapters) {
+  $alias = $adapter.Name
+  $remaining = @()
+  for ($attempt = 0; $attempt -lt 5; $attempt++) {
+    foreach ($family in @('IPv4', 'IPv6')) {
+      Get-NetRoute -InterfaceAlias $alias -AddressFamily $family -ErrorAction SilentlyContinue |
+        Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+      Get-NetIPAddress -InterfaceAlias $alias -AddressFamily $family -ErrorAction SilentlyContinue |
+        Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    $remaining = @(
+      Get-NetRoute -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue
+      Get-NetRoute -InterfaceAlias $alias -AddressFamily IPv6 -ErrorAction SilentlyContinue
+      Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue
+      Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv6 -ErrorAction SilentlyContinue
+    )
+    if ($remaining.Count -eq 0) { break }
+    Start-Sleep -Milliseconds 100
+  }
+  Set-DnsClientServerAddress -InterfaceAlias $alias -ResetServerAddresses -ErrorAction SilentlyContinue
+  Set-NetIPInterface -InterfaceAlias $alias -Forwarding Disabled -RouterDiscovery Disabled -ErrorAction SilentlyContinue
+  if ($remaining.Count -gt 0) {
+    throw "Windows TUN adapter $alias still has routes or addresses"
+  }
+}
+"#;
+    let status = Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "PowerShell TUN cleanup exited with {status}"
+        )))
     }
 }
 
@@ -398,6 +467,69 @@ fn release_managed_core(managed: &mut Option<ManagedCore>) -> Result<(), Error> 
     Ok(())
 }
 
+#[cfg(windows)]
+fn process_is_alive(pid: u32) -> bool {
+    // OpenProcess is not exposed by the windows-sys 0.52 feature set used by
+    // the helper, so keep the tiny kernel32 declaration local to this probe.
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(desired_access: u32, inherit_handle: i32, process_id: u32) -> HANDLE;
+    }
+    const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+    const STILL_ACTIVE: u32 = 259;
+
+    // SAFETY: the PID comes from the authenticated desktop client and the
+    // handle is closed on every successful open.
+    let handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if handle == 0 {
+        return false;
+    }
+    let mut exit_code = 0;
+    let alive = unsafe {
+        windows_sys::Win32::System::Threading::GetExitCodeProcess(handle, &mut exit_code) != 0
+    } && exit_code == STILL_ACTIVE;
+    unsafe {
+        CloseHandle(handle);
+    }
+    alive
+}
+
+#[cfg(windows)]
+fn monitor_owner_process(session_id: String, owner_pid: u32) {
+    const POLL_INTERVAL: Duration = Duration::from_millis(500);
+    loop {
+        thread::sleep(POLL_INTERVAL);
+        {
+            let managed = lock_surviving_poison(&MANAGED_CORE);
+            if !managed
+                .as_ref()
+                .is_some_and(|core| core.session_id == session_id)
+            {
+                // The session was stopped or replaced; do not leave one
+                // polling thread behind for every start/stop cycle.
+                return;
+            }
+        }
+        if process_is_alive(owner_pid) {
+            continue;
+        }
+        let mut managed = lock_surviving_poison(&MANAGED_CORE);
+        let owns_core = managed
+            .as_ref()
+            .is_some_and(|core| core.session_id == session_id);
+        if owns_core {
+            if let Err(error) = release_managed_core(&mut managed) {
+                log_message(format!(
+                    "Helper could not stop the Core after owner exit: {error}"
+                ));
+            } else {
+                log_message("Helper stopped the Core after the desktop owner exited".to_string());
+            }
+        }
+        return;
+    }
+}
+
 fn json_response<T: Serialize>(value: &T, status: StatusCode) -> warp::reply::Response {
     warp::reply::with_status(warp::reply::json(value), status).into_response()
 }
@@ -468,6 +600,21 @@ fn launch(start_params: StartParams) -> warp::reply::Response {
             StatusCode::INTERNAL_SERVER_ERROR,
         );
     }
+    // A previous Helper instance may have been terminated before it could
+    // clean the Windows TUN adapter. Repair that state before handing traffic
+    // to a new Core so the first launch after a crash cannot inherit a dead
+    // default route or DNS server.
+    #[cfg(windows)]
+    if let Err(error) = cleanup_windows_tun() {
+        log_message(format!(
+            "Helper could not clean stale Windows TUN state: {error}"
+        ));
+        return error_response(
+            "tunCleanupFailed",
+            error.to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        );
+    }
     let core = match VerifiedCore::open() {
         Ok(core) => core,
         Err(error) => {
@@ -510,6 +657,11 @@ fn launch(start_params: StartParams) -> warp::reply::Response {
                     );
                 }
             };
+            #[cfg(windows)]
+            if let Some(owner_pid) = start_params.owner_pid.filter(|pid| *pid != 0) {
+                let session_id = start_params.session_id.clone();
+                thread::spawn(move || monitor_owner_process(session_id, owner_pid));
+            }
             json_response(
                 &StartResponse {
                     session_id: start_params.session_id,
@@ -920,7 +1072,7 @@ mod tests {
 
     #[test]
     fn protocol_uses_lowercase_session_ownership() {
-        assert_eq!(PROTOCOL_VERSION, if cfg!(windows) { "8" } else { "6" });
+        assert_eq!(PROTOCOL_VERSION, if cfg!(windows) { "9" } else { "6" });
         assert!(is_valid_session_id("0123456789abcdef0123456789abcdef"));
         assert!(!is_valid_session_id("ABCDEF0123456789abcdef0123456789"));
         assert!(!is_valid_session_id("0123456789abcdef"));
@@ -1130,6 +1282,7 @@ mod tests {
         let response = launch(StartParams {
             address: ALLOWED_CORE_ADDRESS.to_string(),
             session_id: "0123456789abcdef0123456789abcdef".to_string(),
+            owner_pid: None,
         });
 
         assert_eq!(response.status(), StatusCode::CONFLICT);
@@ -1326,6 +1479,7 @@ mod tests {
             .json(&StartParams {
                 address: ALLOWED_CORE_ADDRESS.to_string(),
                 session_id: "ABCDEF0123456789abcdef0123456789".to_string(),
+                owner_pid: None,
             })
             .reply(&routes())
             .await;

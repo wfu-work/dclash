@@ -77,31 +77,39 @@ class NodeQualityService extends GetxService {
   List<NodeQualitySummary> summaries(Duration window) {
     final after = _clock().toUtc().subtract(window);
     return _samples.entries.map((entry) {
-      final samples = entry.value
-          .where((sample) => !sample.at.isBefore(after))
-          .toList();
-      final successful = samples.where((sample) => sample.delay >= 0).toList();
-      final average = successful.isEmpty
+      final samples = <NodeQualitySample>[];
+      var successfulCount = 0;
+      var failureCount = 0;
+      var successfulTotal = 0;
+      var successfulSquares = 0;
+      for (final sample in entry.value) {
+        if (sample.at.isBefore(after)) continue;
+        samples.add(sample);
+        if (sample.delay >= 0) {
+          successfulCount++;
+          successfulTotal += sample.delay;
+          successfulSquares += sample.delay * sample.delay;
+        } else {
+          failureCount++;
+        }
+      }
+      final average = successfulCount == 0
           ? null
-          : successful.map((sample) => sample.delay).reduce((a, b) => a + b) ~/
-                successful.length;
-      final jitter = successful.length < 2 || average == null
+          : successfulTotal ~/ successfulCount;
+      final jitter = successfulCount < 2 || average == null
           ? null
           : sqrt(
-              successful
-                      .map((sample) => pow(sample.delay - average, 2))
-                      .reduce((a, b) => a + b) /
-                  successful.length,
+              (successfulSquares -
+                      2 * average * successfulTotal +
+                      successfulCount * average * average) /
+                  successfulCount,
             ).round();
       return NodeQualitySummary(
         name: entry.key,
         samples: samples,
         average: average,
         jitter: jitter,
-        failureRate: samples.isEmpty
-            ? 0
-            : samples.where((sample) => sample.delay < 0).length /
-                  samples.length,
+        failureRate: samples.isEmpty ? 0 : failureCount / samples.length,
         lastDelay: samples.isEmpty ? null : samples.last.delay,
       );
     }).toList()..sort((a, b) {

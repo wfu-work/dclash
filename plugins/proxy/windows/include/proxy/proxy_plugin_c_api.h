@@ -16,8 +16,8 @@ extern "C" {
 FLUTTER_PLUGIN_EXPORT void ProxyPluginCApiRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar);
 
-// Safe pre-engine.
-FLUTTER_PLUGIN_EXPORT bool ProxyPluginClearStaleProxy();
+// Safe pre-engine. Only clears a dead loopback proxy for the supplied port.
+FLUTTER_PLUGIN_EXPORT bool ProxyPluginClearStaleProxy(int port);
 
 #if defined(__cplusplus)
 }  // extern "C"

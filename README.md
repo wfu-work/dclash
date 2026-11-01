@@ -100,6 +100,12 @@ make check           # 格式化、分析和测试
 make apk-debug       # 构建 Android ARM64 Debug APK
 make macos           # 构建 macOS Debug App
 make macos-release   # 构建 macOS Release App
+make windows         # 构建 Windows Debug App
+make windows-run     # 启动 Windows 桌面调试版并支持热重载
+make windows-release  # 构建 Windows Release App
+make windows-run-release # 构建并运行 Windows Release App
+make windows-nsis     # 构建 Windows NSIS 安装包（需要 NSIS）
+make windows-package  # windows-nsis 的别名
 make dmg             # 构建 macOS DMG 安装包和 SHA-256 校验文件
 make clean           # 清理 Flutter 构建缓存
 ```
@@ -117,6 +123,19 @@ make dev FLUTTER=/path/to/flutter/bin/flutter
 make dmg MACOS_ARCH=arm64 DMG_DIR=/tmp/dclash-releases
 make test TEST_CONCURRENCY=2
 ```
+
+Windows 下可以通过 `FLUTTER_HOME` 指定 Flutter SDK：
+
+```powershell
+make windows FLUTTER_HOME=C:/path/to/flutter
+make windows-run FLUTTER_HOME=C:/path/to/flutter
+make windows-run-release FLUTTER_HOME=C:/path/to/flutter
+make windows-nsis FLUTTER_HOME=C:/path/to/flutter NSIS="C:/Program Files/NSIS/makensis.exe"
+```
+
+NSIS 安装包和 SHA-256 校验文件输出到 `dist/windows-nsis/`。也可以通过
+`WINDOWS_DIST_DIR`、`WINDOWS_BUILD_DIR` 和 `WINDOWS_VERSION` 覆盖输出目录、Release
+目录和安装包版本。
 
 ## 项目结构
 

@@ -80,6 +80,22 @@ def _icon(
     return image
 
 
+def _rounded_tile(
+    background: tuple[int, int, int, int],
+    foreground: tuple[int, int, int, int],
+) -> Image.Image:
+    """Create a launcher tile with transparent, consistently rounded corners."""
+    image = Image.new("RGBA", (SIZE, SIZE), transparent)
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(
+        (0, 0, SIZE - 1, SIZE - 1),
+        radius=232,
+        fill=background,
+    )
+    _segments(draw, foreground)
+    return image
+
+
 def _dock_icon(
     background: tuple[int, int, int, int],
     foreground: tuple[int, int, int, int],
@@ -90,15 +106,7 @@ def _dock_icon(
     corners transparent and drawing the rounded tile ourselves prevents the
     system from inserting a grey backing behind the monochrome mark.
     """
-    image = Image.new("RGBA", (SIZE, SIZE), transparent)
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle(
-        (0, 0, SIZE - 1, SIZE - 1),
-        radius=232,
-        fill=background,
-    )
-    _segments(draw, foreground)
-    return image
+    return _rounded_tile(background, foreground)
 
 
 def _png_bytes(image: Image.Image) -> bytes:
@@ -145,9 +153,11 @@ black = (0, 0, 0, 255)
 white = (255, 255, 255, 255)
 transparent = (0, 0, 0, 0)
 
-# Opaque brand marks used by Flutter, Android and Windows.
-light = _icon(white, black)
-dark = _icon(black, white)
+# Launcher brand marks use the same rounded tile on every platform. The
+# transparent corners keep Windows and Android from displaying a square halo
+# around the icon when the host does not apply its own mask.
+light = _rounded_tile(white, black)
+dark = _rounded_tile(black, white)
 light.save(brand / "app_icon.png")
 dark.save(brand / "app_icon_dark.png")
 

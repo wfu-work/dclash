@@ -262,6 +262,15 @@ void main() {
     },
   );
 
+  test('cleared core logs can record a repeated signature', () async {
+    core.logs.add(CoreLog(level: 'error', message: 'same log', time: now));
+    expect(timeline.entries, hasLength(1));
+
+    core.logs.clear();
+    core.logs.add(CoreLog(level: 'error', message: 'same log', time: now));
+    expect(timeline.entries, hasLength(2));
+  });
+
   test(
     'report package is a sanitized text and JSON ZIP with no new core calls',
     () async {

@@ -28,6 +28,7 @@
 #include <flutter/standard_method_codec.h>
 
 #include <memory>
+#include <optional>
 
 namespace
 {
@@ -35,6 +36,27 @@ namespace
 constexpr int kMinProxyPort = 1;
 constexpr int kMaxProxyPort = 65535;
 constexpr wchar_t kProxyServerPrefix[] = L"127.0.0.1:";
+
+constexpr DWORD kProxyStateOptionCount = 5;
+
+// WinINet's per-connection settings are independent for the default
+// connection and for every RAS entry.  Keep all options that can affect
+// whether a connection uses a proxy so stopping DClash restores the user's
+// exact settings, including PAC and automatic discovery.
+struct ConnectionProxyState
+{
+  std::optional<std::wstring> connection;
+  DWORD flags = PROXY_TYPE_DIRECT;
+  DWORD autodiscovery_flags = 0;
+  std::wstring proxy_server;
+  std::wstring proxy_bypass;
+  std::wstring autoconfig_url;
+};
+
+struct ProxySnapshot
+{
+  std::vector<ConnectionProxyState> connections;
+};
 
 std::wstring Utf8ToWide(const std::string& value)
 {
@@ -143,6 +165,147 @@ bool NotifySettingsChanged()
   return changed && refreshed;
 }
 
+bool QueryConnectionState(LPTSTR connection, ConnectionProxyState& state)
+{
+  std::vector<INTERNET_PER_CONN_OPTION> options(kProxyStateOptionCount);
+  options[0].dwOption = INTERNET_PER_CONN_FLAGS;
+  options[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+  options[2].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+  options[3].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
+  options[4].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+  INTERNET_PER_CONN_OPTION_LIST list = {};
+  list.dwSize = sizeof(list);
+  list.pszConnection = connection;
+  list.dwOptionCount = static_cast<DWORD>(options.size());
+  list.pOptions = options.data();
+
+  DWORD size = sizeof(list);
+  const BOOL queried = InternetQueryOption(
+      nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size);
+  if (queried == FALSE)
+  {
+    for (const size_t index : {size_t(1), size_t(2), size_t(3)})
+    {
+      if (options[index].Value.pszValue != nullptr)
+      {
+        GlobalFree(options[index].Value.pszValue);
+      }
+    }
+    return false;
+  }
+
+  state.connection = connection == nullptr
+                         ? std::nullopt
+                         : std::optional<std::wstring>(std::wstring(connection));
+  state.flags = options[0].Value.dwValue;
+  state.autodiscovery_flags = options[4].Value.dwValue;
+  if (options[1].Value.pszValue != nullptr)
+  {
+    state.proxy_server = options[1].Value.pszValue;
+  }
+  if (options[2].Value.pszValue != nullptr)
+  {
+    state.proxy_bypass = options[2].Value.pszValue;
+  }
+  if (options[3].Value.pszValue != nullptr)
+  {
+    state.autoconfig_url = options[3].Value.pszValue;
+  }
+
+  // WinINet allocates strings returned by InternetQueryOption with
+  // GlobalAlloc.  Free every returned string even when one of the values was
+  // empty, otherwise repeated start/stop cycles leak the process heap.
+  for (const size_t index : {size_t(1), size_t(2), size_t(3)})
+  {
+    if (options[index].Value.pszValue != nullptr)
+    {
+      GlobalFree(options[index].Value.pszValue);
+    }
+  }
+  return true;
+}
+
+bool CaptureProxySnapshot(ProxySnapshot& snapshot)
+{
+  snapshot.connections.clear();
+  return ForEachConnection(
+      [&snapshot](LPTSTR connection)
+      {
+        ConnectionProxyState state;
+        if (!QueryConnectionState(connection, state))
+        {
+          return false;
+        }
+        snapshot.connections.push_back(std::move(state));
+        return true;
+      });
+}
+
+bool RestoreConnectionState(const ConnectionProxyState& state)
+{
+  std::vector<INTERNET_PER_CONN_OPTION> options(kProxyStateOptionCount);
+  options[0].dwOption = INTERNET_PER_CONN_FLAGS;
+  options[0].Value.dwValue = state.flags;
+  options[1].dwOption = INTERNET_PER_CONN_PROXY_SERVER;
+  options[1].Value.pszValue = const_cast<LPTSTR>(
+      state.proxy_server.empty() ? L"" : state.proxy_server.c_str());
+  options[2].dwOption = INTERNET_PER_CONN_PROXY_BYPASS;
+  options[2].Value.pszValue = const_cast<LPTSTR>(
+      state.proxy_bypass.empty() ? L"" : state.proxy_bypass.c_str());
+  options[3].dwOption = INTERNET_PER_CONN_AUTOCONFIG_URL;
+  options[3].Value.pszValue = const_cast<LPTSTR>(
+      state.autoconfig_url.empty() ? L"" : state.autoconfig_url.c_str());
+  options[4].dwOption = INTERNET_PER_CONN_AUTODISCOVERY_FLAGS;
+  options[4].Value.dwValue = state.autodiscovery_flags;
+
+  INTERNET_PER_CONN_OPTION_LIST list = {};
+  list.dwSize = sizeof(list);
+  list.pszConnection = state.connection.has_value()
+                           ? const_cast<LPTSTR>(state.connection->c_str())
+                           : nullptr;
+  list.dwOptionCount = static_cast<DWORD>(options.size());
+  list.pOptions = options.data();
+  return InternetSetOption(
+             nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list,
+             sizeof(list)) != FALSE;
+}
+
+std::optional<int> ProxyPort(const std::wstring& server);
+
+bool RestoreProxySnapshot(
+    const ProxySnapshot& snapshot,
+    const std::optional<int>& active_port)
+{
+  bool success = true;
+  for (const auto& connection : snapshot.connections)
+  {
+    if (active_port.has_value())
+    {
+      ConnectionProxyState current;
+      if (!QueryConnectionState(
+              connection.connection.has_value()
+                  ? const_cast<LPTSTR>(connection.connection->c_str())
+                  : nullptr,
+              current))
+      {
+        success = false;
+        continue;
+      }
+      const auto current_port = ProxyPort(current.proxy_server);
+      // The user may have changed the system proxy while DClash was running.
+      // Do not overwrite that change when stopping or when the process is
+      // being torn down.
+      if ((current.flags & PROXY_TYPE_PROXY) == 0 || !current_port ||
+          *current_port != *active_port)
+      {
+        continue;
+      }
+    }
+    success = RestoreConnectionState(connection) && success;
+  }
+  return success;
+}
+
 bool startProxy(const int port, const flutter::EncodableList& bypassDomain)
 {
   auto url = kProxyServerPrefix + std::to_wstring(port);
@@ -168,19 +331,11 @@ bool startProxy(const int port, const flutter::EncodableList& bypassDomain)
   return optionsApplied && settingsNotified;
 }
 
-bool stopProxy()
+bool stopProxy(
+    const ProxySnapshot& snapshot,
+    const std::optional<int>& active_port = std::nullopt)
 {
-  std::vector<INTERNET_PER_CONN_OPTION> options(1);
-
-  INTERNET_PER_CONN_OPTION_LIST list = {};
-  list.dwSize = sizeof(list);
-  list.dwOptionCount = 1;
-  list.pOptions = options.data();
-
-  options[0].dwOption = INTERNET_PER_CONN_FLAGS;
-  options[0].Value.dwValue = PROXY_TYPE_DIRECT;
-
-  const bool optionsApplied = ApplyOptionsToConnections(list);
+  const bool optionsApplied = RestoreProxySnapshot(snapshot, active_port);
   const bool settingsNotified = NotifySettingsChanged();
   return optionsApplied && settingsNotified;
 }
@@ -278,6 +433,7 @@ bool IsPortReleased(int port)
 
 bool ClearStaleProxyForConnection(
     LPTSTR connection,
+    int target_port,
     std::map<int, bool>& releasedPorts)
 {
   std::vector<INTERNET_PER_CONN_OPTION> options(2);
@@ -295,6 +451,10 @@ bool ClearStaleProxyForConnection(
           nullptr, INTERNET_OPTION_PER_CONNECTION_OPTION, &list, &size) ==
       FALSE)
   {
+    if (options[1].Value.pszValue != nullptr)
+    {
+      GlobalFree(options[1].Value.pszValue);
+    }
     return false;
   }
   const DWORD flags = options[0].Value.dwValue;
@@ -306,7 +466,7 @@ bool ClearStaleProxyForConnection(
   }
 
   const auto port = ProxyPort(server);
-  if ((flags & PROXY_TYPE_PROXY) == 0 || !port)
+  if ((flags & PROXY_TYPE_PROXY) == 0 || !port || *port != target_port)
   {
     return true;
   }
@@ -332,13 +492,23 @@ bool ClearStaleProxyForConnection(
 namespace proxy
 {
 
-  bool ClearStaleProxy()
+struct ProxyState
+{
+  std::optional<ProxySnapshot> snapshot;
+  std::optional<int> active_port;
+};
+
+  bool ClearStaleProxy(int port)
   {
+    if (port < kMinProxyPort || port > kMaxProxyPort)
+    {
+      return false;
+    }
     std::map<int, bool> releasedPorts;
     const bool cleared = ForEachConnection(
-        [&releasedPorts](LPTSTR connection)
+        [port, &releasedPorts](LPTSTR connection)
         {
-          return ClearStaleProxyForConnection(connection, releasedPorts);
+          return ClearStaleProxyForConnection(connection, port, releasedPorts);
         });
     const bool settingsNotified = NotifySettingsChanged();
     return cleared && settingsNotified;
@@ -364,8 +534,10 @@ namespace proxy
     registrar->AddPlugin(std::move(plugin));
   }
 
+  ProxyPlugin::ProxyPlugin() : state_(std::make_unique<ProxyState>()) {}
+
   ProxyPlugin::ProxyPlugin(flutter::PluginRegistrarWindows* registrar)
-      : registrar_(registrar)
+      : registrar_(registrar), state_(std::make_unique<ProxyState>())
   {
     window_proc_id_ = registrar_->RegisterTopLevelWindowProcDelegate(
         [this](HWND window, UINT message, WPARAM wparam, LPARAM lparam)
@@ -376,6 +548,16 @@ namespace proxy
 
   ProxyPlugin::~ProxyPlugin()
   {
+    if (state_ != nullptr && state_->snapshot.has_value())
+    {
+      // The normal Dart shutdown path calls StopProxy, but restoring here
+      // also covers engine teardown and plugin destruction after an error.
+      if (stopProxy(*state_->snapshot, state_->active_port))
+      {
+        state_->snapshot.reset();
+        state_->active_port.reset();
+      }
+    }
     if (registrar_ != nullptr)
     {
       registrar_->UnregisterTopLevelWindowProcDelegate(window_proc_id_);
@@ -392,9 +574,14 @@ namespace proxy
   std::optional<LRESULT> ProxyPlugin::HandleWindowProc(
       HWND window, UINT message, WPARAM wparam, LPARAM lparam)
   {
-    if (proxy_applied_ && IsSessionEnding(message, wparam))
+    if (state_ != nullptr && state_->snapshot.has_value() &&
+        IsSessionEnding(message, wparam))
     {
-      proxy_applied_ = !stopProxy();
+      if (stopProxy(*state_->snapshot, state_->active_port))
+      {
+        state_->snapshot.reset();
+        state_->active_port.reset();
+      }
     }
     return std::nullopt;
   }
@@ -405,9 +592,37 @@ namespace proxy
   {
     if (method_call.method_name() == "StopProxy")
     {
-      const bool stopped = stopProxy();
-      proxy_applied_ = proxy_applied_ && !stopped;
+      const bool stopped = state_ == nullptr || !state_->snapshot.has_value()
+                               ? true
+                               : stopProxy(*state_->snapshot,
+                                           state_->active_port);
+      if (stopped && state_ != nullptr)
+      {
+        state_->snapshot.reset();
+        state_->active_port.reset();
+      }
       result->Success(stopped);
+    }
+    else if (method_call.method_name() == "RecoverStaleProxy")
+    {
+      auto *arguments =
+          std::get_if<flutter::EncodableMap>(method_call.arguments());
+      if (arguments == nullptr)
+      {
+        result->Error("bad_args", "RecoverStaleProxy requires argument map");
+        return;
+      }
+      auto portIt = arguments->find(flutter::EncodableValue("port"));
+      auto *port = portIt == arguments->end()
+                       ? nullptr
+                       : std::get_if<int>(&portIt->second);
+      if (port == nullptr || *port < kMinProxyPort || *port > kMaxProxyPort)
+      {
+        result->Error(
+            "bad_args", "RecoverStaleProxy port must be between 1 and 65535");
+        return;
+      }
+      result->Success(ClearStaleProxy(*port));
     }
     else if (method_call.method_name() == "StartProxy")
     {
@@ -442,9 +657,48 @@ namespace proxy
             "bad_args", "StartProxy bypassDomain must contain only strings");
         return;
       }
-      // A start that reports failure can still have written the setting.
-      proxy_applied_ = true;
-      result->Success(startProxy(*port, *bypassDomain));
+      if (state_ == nullptr)
+      {
+        result->Success(false);
+        return;
+      }
+      // A live session owns the snapshot and the port that was applied.  A
+      // second start on a different port cannot be rolled back safely: the
+      // original proxy would remain active while the snapshot could be
+      // discarded.  Require callers to stop the current session first.
+      if (state_->snapshot.has_value() && state_->active_port.has_value() &&
+          *state_->active_port != *port)
+      {
+        result->Success(false);
+        return;
+      }
+      if (!state_->snapshot.has_value())
+      {
+        ProxySnapshot snapshot;
+        if (!CaptureProxySnapshot(snapshot))
+        {
+          result->Success(false);
+          return;
+        }
+        state_->snapshot = std::move(snapshot);
+      }
+
+      // A start that reports failure can still have written the setting. Roll
+      // back to the captured state so a failed enable never leaves a proxy
+      // pointing at a port the app did not successfully claim.
+      // Record the target before writing so a partial start can be rolled back
+      // only where WinINet still points at this invocation's loopback port.
+      state_->active_port = *port;
+      const bool started = startProxy(*port, *bypassDomain);
+      if (!started)
+      {
+        if (stopProxy(*state_->snapshot, state_->active_port))
+        {
+          state_->snapshot.reset();
+          state_->active_port.reset();
+        }
+      }
+      result->Success(started);
     }
     else
     {

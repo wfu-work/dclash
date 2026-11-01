@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "com.cloudrift" "\0"
             VALUE "FileDescription", "Cloudrift" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "dclash_flutter" "\0"
+            VALUE "InternalName", "dclash" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.cloudrift. All rights reserved." "\0"
-            VALUE "OriginalFilename", "dclash_flutter.exe" "\0"
+            VALUE "OriginalFilename", "dclash.exe" "\0"
             VALUE "ProductName", "Cloudrift" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

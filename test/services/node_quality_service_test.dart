@@ -92,6 +92,8 @@ void main() {
   test(
     'records changed manual delay results, failures, average and jitter',
     () {
+      core.delays['Tokyo'] = 20;
+      now = now.add(const Duration(days: 2));
       core.delays['Tokyo'] = 40;
       core.delays['Tokyo'] = 40;
       now = now.add(const Duration(minutes: 1));

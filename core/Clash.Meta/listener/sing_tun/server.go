@@ -670,7 +670,7 @@ func (l *Listener) Close() error {
 	if l.cDialerInterfaceFinder != nil {
 		dialer.DefaultInterfaceFinder.CompareAndSwap(l.cDialerInterfaceFinder, nil)
 	}
-	return common.Close(
+	closeErr := common.Close(
 		l.ruleUpdateCallbackCloser,
 		l.tunStack,
 		l.tunIf,
@@ -679,6 +679,10 @@ func (l *Listener) Close() error {
 		l.networkUpdateMonitor,
 		l.packageManager,
 	)
+	if cleanupErr := cleanupTunInterface(l.tunName); cleanupErr != nil {
+		log.Warnln("[TUN] cleanup Windows interface %s failed: %v", l.tunName, cleanupErr)
+	}
+	return closeErr
 }
 
 func (l *Listener) Config() LC.Tun {

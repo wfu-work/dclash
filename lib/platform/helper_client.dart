@@ -64,7 +64,13 @@ class HelperClient {
       await _request(
         'POST',
         '/start',
-        body: {'sessionId': session, 'address': address},
+        body: {
+          'sessionId': session,
+          'address': address,
+          // The helper uses this lease owner to stop the Core if the desktop
+          // process is killed before it can send /stop.
+          'ownerPid': pid,
+        },
       ),
     );
     if (reply is! Map ||
@@ -124,7 +130,7 @@ class HelperClient {
         );
       }
       if (response.headers.value('x-dclash-helper-protocol') !=
-          (Platform.isWindows ? '8' : '6')) {
+          (Platform.isWindows ? '9' : '6')) {
         throw const CoreException(
           'helper_version',
           'The installed DClash helper protocol is incompatible',
@@ -166,6 +172,9 @@ class HelperClient {
       result = await Process.run('pkexec', [executable, command]);
     } else {
       final quotedPath = "'${executable.replaceAll("'", "''")}'";
+      // Installation uses this PID only to resolve the account SID. The
+      // service remains persistent; each /start request carries a separate
+      // desktop PID lease so a crashed app can release its Core/TUN session.
       final arguments = uninstall
           ? "@('uninstall')"
           : "@('install','--owner-pid','$pid')";

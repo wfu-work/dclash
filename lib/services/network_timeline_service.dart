@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../domains/clash_connection.dart';
 import '../domains/diagnostic_privacy.dart';
 import '../domains/network_health.dart';
 import '../domains/network_timeline.dart';
@@ -40,6 +41,7 @@ class NetworkTimelineService extends GetxService {
   final _workers = <Worker>[];
   final _knownReports = <String>{};
   final _knownLogs = <String>{};
+  CoreLog? _lastProcessedLog;
   SharedPreferences? _preferences;
   Future<void> _writes = Future.value();
   String _status = '';
@@ -65,6 +67,7 @@ class NetworkTimelineService extends GetxService {
     _trafficSaveError = traffic.saveError.value;
     _knownReports.addAll(health.entries.map((entry) => entry.id));
     _knownLogs.addAll(core.logs.map(_logSignature));
+    _lastProcessedLog = core.logs.isEmpty ? null : core.logs.last;
     _workers.add(ever(core.status, (value) => _onStatus(value.name)));
     _workers.add(ever(core.error, (value) => _onError(value?.toString())));
     _workers.add(ever(core.routeState, (_) => _onRoute()));
@@ -200,7 +203,27 @@ class NetworkTimelineService extends GetxService {
   }
 
   void _onLogs() {
-    for (final log in core.logs) {
+    final logs = core.logs;
+    if (logs.isEmpty) {
+      _knownLogs.clear();
+      _lastProcessedLog = null;
+      return;
+    }
+    var start = 0;
+    final last = _lastProcessedLog;
+    if (last != null) {
+      final index = logs.lastIndexWhere((log) => identical(log, last));
+      if (index >= 0) {
+        start = index + 1;
+      } else {
+        // The bounded log buffer was replaced or truncated. Scan the current
+        // window from the beginning while retaining signatures for entries
+        // that are still present, avoiding duplicate timeline events after
+        // the 1000-item buffer evicts its oldest object.
+      }
+    }
+    for (var index = start; index < logs.length; index++) {
+      final log = logs[index];
       final signature = _logSignature(log);
       if (!_knownLogs.add(signature)) continue;
       final level = log.level.toLowerCase();
@@ -215,6 +238,7 @@ class NetworkTimelineService extends GetxService {
         occurredAt: log.time,
       );
     }
+    _lastProcessedLog = logs.isEmpty ? null : logs.last;
     while (_knownLogs.length > 1200) {
       _knownLogs.remove(_knownLogs.first);
     }

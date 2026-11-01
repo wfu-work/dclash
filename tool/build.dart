@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'verify_macos_bundle.dart';
+import 'flutter_command.dart' as flutter_command;
 
 /// Builds a Flutter target with optional explicit native-hook configuration.
 /// Run serially with other Flutter commands, including tool/test.dart.
@@ -51,32 +51,21 @@ Future<void> buildFlutter(String target, List<String> arguments) async {
     configured = original.replaceFirst(
       section,
       '    rust_api:\n'
-      '      cargo_home: ${jsonEncode('${cargoHome.path}${Platform.pathSeparator}')}\n'
+      '      cargo_home: ${jsonEncode(cargoHome.uri.toString())}\n'
       '      cargo_isolated: true',
     );
   }
-  final signals = <StreamSubscription<ProcessSignal>>[];
   try {
     if (configured != original) await pubspec.writeAsString(configured);
-    final process = await Process.start('flutter', [
+    exitCode = await flutter_command.runFlutter([
       'build',
       target,
       ...flutterArguments,
-    ], mode: ProcessStartMode.inheritStdio);
-    for (final signal in [
-      ProcessSignal.sigint,
-      if (!Platform.isWindows) ProcessSignal.sigterm,
-    ]) {
-      signals.add(signal.watch().listen((_) => process.kill(signal)));
-    }
-    exitCode = await process.exitCode;
+    ]);
     if (exitCode == 0 && target == 'macos') {
       await verifyBuiltMacOSBundle(flutterArguments);
     }
   } finally {
-    for (final signal in signals) {
-      await signal.cancel();
-    }
     if (configured != original) await pubspec.writeAsString(original);
   }
 }

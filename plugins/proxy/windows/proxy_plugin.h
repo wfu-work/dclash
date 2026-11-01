@@ -11,15 +11,17 @@
 
 namespace proxy {
 
+struct ProxyState;
+
 // Turns off a system proxy that still points at FlClash's address while
 // nothing listens on its port any more, the state a killed app leaves behind.
-bool ClearStaleProxy();
+bool ClearStaleProxy(int port);
 
 class ProxyPlugin : public flutter::Plugin {
  public:
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
 
-  ProxyPlugin() = default;
+  ProxyPlugin();
 
   explicit ProxyPlugin(flutter::PluginRegistrarWindows* registrar);
 
@@ -40,8 +42,7 @@ class ProxyPlugin : public flutter::Plugin {
  private:
   flutter::PluginRegistrarWindows* registrar_ = nullptr;
   int window_proc_id_ = -1;
-  // Whether this process is the one that pointed Windows at a proxy.
-  bool proxy_applied_ = false;
+  std::unique_ptr<ProxyState> state_;
 };
 
 }  // namespace proxy

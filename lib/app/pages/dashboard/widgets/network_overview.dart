@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../../domains/clash_connection.dart';
 import '../../../widgets/app_widgets.dart';
 import '../dashboard_controller.dart';
 
@@ -34,6 +35,21 @@ class _DashboardNetworkOverviewState extends State<DashboardNetworkOverview> {
   String _label(String section) =>
       (section == 'connections' ? 'dashboardRecentConnections' : 'proxyGroups')
           .tr;
+
+  List<ClashConnection> _recentConnections(Iterable<ClashConnection> source) {
+    final recent = <ClashConnection>[];
+    for (final connection in source) {
+      var index = 0;
+      while (index < recent.length &&
+          recent[index].startedAt.compareTo(connection.startedAt) >= 0) {
+        index++;
+      }
+      if (index >= 3) continue;
+      recent.insert(index, connection);
+      if (recent.length > 3) recent.removeLast();
+    }
+    return recent;
+  }
 
   VoidCallback get _open => _selected == 'proxyGroups'
       ? widget.onOpenGroups
@@ -129,8 +145,9 @@ class _DashboardNetworkOverviewState extends State<DashboardNetworkOverview> {
                     ),
                 ];
               } else {
-                final connections = widget.controller.core.connections.toList()
-                  ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+                final connections = _recentConnections(
+                  widget.controller.core.connections,
+                );
                 items = [
                   for (final connection in connections.take(3))
                     _PreviewRow(

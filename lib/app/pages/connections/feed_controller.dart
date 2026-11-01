@@ -11,6 +11,10 @@ class FeedController extends GetxController {
   final query = ''.obs;
   final paused = false.obs;
   List<Map<String, dynamic>> _snapshot = [];
+  // Records are immutable after insertion in the normal event path. Keep the
+  // normalized representation attached to each map so rebuilding the feed or
+  // changing the search query does not pretty-print every record again.
+  final Expando<String> _searchText = Expando<String>();
   List<Map<String, dynamic>> get records =>
       dns ? core.dnsQueries : core.requests;
   List<Map<String, dynamic>> get visibleRecords {
@@ -18,10 +22,17 @@ class FeedController extends GetxController {
     return (paused.value ? _snapshot : records).reversed
         .where(
           (item) =>
-              search.isEmpty ||
-              encodeRecord(item).toLowerCase().contains(search),
+              search.isEmpty || _normalizedSearchText(item).contains(search),
         )
         .toList();
+  }
+
+  String _normalizedSearchText(Map<String, dynamic> record) {
+    final cached = _searchText[record];
+    if (cached != null) return cached;
+    final value = encodeRecord(record).toLowerCase();
+    _searchText[record] = value;
+    return value;
   }
 
   void togglePause() {

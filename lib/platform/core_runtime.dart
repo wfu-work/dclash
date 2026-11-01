@@ -82,6 +82,10 @@ class DesktopCoreRuntime implements CoreRuntime {
     _cancelled = false;
     _processExitReported = false;
     _proxyPort = (fields['mixedPort'] as num?)?.toInt() ?? 7890;
+    // A previous process may have been terminated before it could restore the
+    // WinINet setting. Clear dead loopback proxies before starting a new core;
+    // the same helper is also called from stop/close for crash recovery.
+    if (Platform.isWindows) await _recoverStaleProxy();
     if (!await File(corePath).exists()) {
       throw const CoreException(
         'missing_core',
@@ -228,7 +232,13 @@ class DesktopCoreRuntime implements CoreRuntime {
       }
       return;
     }
-    if (!_proxyOwned) return;
+    // The native Windows plugin owns the snapshot of the user's original
+    // WinINet settings.  Keep asking it to restore even when the Dart flag was
+    // lost during an interrupted start/close; StopProxy is idempotent and is a
+    // no-op when the plugin has no active snapshot.  Other platforms retain
+    // their previous ownership guard because their stop implementations do
+    // not have the same native session state.
+    if (!_proxyOwned && !Platform.isWindows) return;
     if (!await _proxy.stopProxy()) {
       throw const CoreException(
         'system_proxy',
@@ -248,10 +258,7 @@ class DesktopCoreRuntime implements CoreRuntime {
   Future<void> _recoverStaleProxy() async {
     final port = _proxyPort;
     if (port != null && !await _proxy.recoverStaleProxy(port)) {
-      throw const CoreException(
-        'system_proxy',
-        '无法清理残留的系统代理，请检查 macOS 网络代理设置后重试。',
-      );
+      throw const CoreException('system_proxy', '无法清理残留的系统代理，请检查系统网络代理设置后重试。');
     }
   }
 

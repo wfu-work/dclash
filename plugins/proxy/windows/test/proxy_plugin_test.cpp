@@ -49,6 +49,44 @@ TEST(ProxyPlugin, StartProxyRejectsMissingArguments) {
   EXPECT_EQ(error_code, "bad_args");
 }
 
+TEST(ProxyPlugin, RecoverStaleProxyRejectsMissingArguments) {
+  ProxyPlugin plugin;
+  std::string error_code;
+  plugin.HandleMethodCall(
+      MethodCall(
+          "RecoverStaleProxy",
+          std::make_unique<EncodableValue>(EncodableMap())),
+      std::make_unique<MethodResultFunctions<>>(
+          nullptr,
+          [&error_code](
+              const std::string& code,
+              const std::string& message,
+              const EncodableValue* details) { error_code = code; },
+          nullptr));
+
+  EXPECT_EQ(error_code, "bad_args");
+}
+
+TEST(ProxyPlugin, RecoverStaleProxyRejectsInvalidPort) {
+  ProxyPlugin plugin;
+  std::string error_code;
+  EncodableMap arguments = {
+      {EncodableValue("port"), EncodableValue(0)}};
+  plugin.HandleMethodCall(
+      MethodCall(
+          "RecoverStaleProxy",
+          std::make_unique<EncodableValue>(std::move(arguments))),
+      std::make_unique<MethodResultFunctions<>>(
+          nullptr,
+          [&error_code](
+              const std::string& code,
+              const std::string& message,
+              const EncodableValue* details) { error_code = code; },
+          nullptr));
+
+  EXPECT_EQ(error_code, "bad_args");
+}
+
 TEST(ProxyPlugin, StartProxyRejectsInvalidPort) {
   ProxyPlugin plugin;
   std::string error_code;

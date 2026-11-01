@@ -96,6 +96,7 @@ class CoreService extends GetxService
   bool _polling = false;
   bool _foreground = true;
   int? _scheduledInterval;
+  DateTime? _lastDetailPollAt;
   bool _maintenance = false;
   int _recoveryGeneration = 0;
   static const _maxRecoveryAttempts = 3;
@@ -393,6 +394,7 @@ class CoreService extends GetxService
   Future<void> _tearDown() async {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _lastDetailPollAt = null;
     final closingEpoch = _epoch++;
     final runtime = _runtime;
     Object? failure;
@@ -551,48 +553,65 @@ class CoreService extends GetxService
           ? data.whereType<Map>().map((e) => Map<String, dynamic>.from(e))
           : const [],
     );
-    await _poll(_epoch);
+    await _poll(_epoch, forceDetails: true);
   }
 
-  Future<void> _poll(int epoch) async {
+  Future<void> _poll(int epoch, {bool forceDetails = false}) async {
     if (_polling || _runtime == null) return;
     _polling = true;
     try {
+      // Traffic changes quickly, while connection metadata and memory usage
+      // are comparatively expensive to serialize and parse. Keep the former
+      // on the configured cadence and sample the latter at most every five
+      // seconds (or the configured cadence when it is slower).
+      final detailInterval = Duration(
+        seconds: pollIntervalSeconds < 5 ? 5 : pollIntervalSeconds,
+      );
+      final now = DateTime.now();
+      final includeDetails =
+          forceDetails ||
+          _lastDetailPollAt == null ||
+          now.difference(_lastDetailPollAt!) >= detailInterval;
       final results = await Future.wait([
         invoke('getTraffic', false),
         invoke('getTotalTraffic', false),
-        invoke('getConnections'),
-        invoke('getMemoryStats'),
+        if (includeDetails) invoke('getConnections'),
+        if (includeDetails) invoke('getMemoryStats'),
       ]);
       if (epoch != _epoch) return;
-      final traffic = _map(results[0]),
-          total = _map(results[1]),
-          snapshot = _map(results[2]),
-          stats = _map(results[3]);
+      final traffic = _map(results[0]);
+      final total = _map(results[1]);
       upload.value = _integer(traffic['up']);
       download.value = _integer(traffic['down']);
       totalUpload.value = _integer(total['up']);
       totalDownload.value = _integer(total['down']);
-      // RSS represents the memory currently resident in the core process.
-      // Older cores may omit it, so retain the runtime-allocation total as a
-      // compatible fallback.
-      final rss = _integer(stats['rss']);
-      memory.value = rss > 0
-          ? rss
-          : _integer(stats['heapInuse']) +
-                _integer(stats['stackInuse']) +
-                _integer(stats['runtimeOther']);
-      final entries = (snapshot['connections'] as List? ?? [])
-          .whereType<Map>()
-          .take(10000)
-          .map(_connectionFromMap)
-          .toList();
-      connections.assignAll(entries.take(5000));
+      var snapshot = <String, dynamic>{};
+      List<ClashConnection>? parsedConnections;
+      if (includeDetails) {
+        snapshot = _map(results[2]);
+        final stats = _map(results[3]);
+        // RSS represents the memory currently resident in the core process.
+        // Older cores may omit it, so retain the runtime-allocation total as a
+        // compatible fallback.
+        final rss = _integer(stats['rss']);
+        memory.value = rss > 0
+            ? rss
+            : _integer(stats['heapInuse']) +
+                  _integer(stats['stackInuse']) +
+                  _integer(stats['runtimeOther']);
+        parsedConnections = (snapshot['connections'] as List? ?? [])
+            .whereType<Map>()
+            .take(10000)
+            .map(_connectionFromMap)
+            .toList();
+        _lastDetailPollAt = DateTime.now();
+        connections.assignAll(parsedConnections.take(5000));
+      }
       _publishTrafficSnapshot(
         snapshot,
         epoch,
         total: total,
-        parsedConnections: entries,
+        parsedConnections: parsedConnections,
       );
     } finally {
       _polling = false;
@@ -630,18 +649,21 @@ class CoreService extends GetxService
   }) {
     final up = snapshot['uploadTotal'] ?? total?['up'];
     final down = snapshot['downloadTotal'] ?? total?['down'];
+    final connections =
+        parsedConnections ??
+        (snapshot.containsKey('connections')
+            ? (snapshot['connections'] as List? ?? [])
+                  .whereType<Map>()
+                  .take(10000)
+                  .map(_connectionFromMap)
+                  .toList()
+            : trafficUpdate.value?.connections ?? const []);
     trafficUpdate.value = CoreTrafficUpdate(
       session: session,
       totals: up is num && down is num
           ? TrafficAmount(_integer(up), _integer(down))
           : null,
-      connections:
-          parsedConnections ??
-          (snapshot['connections'] as List? ?? [])
-              .whereType<Map>()
-              .take(10000)
-              .map(_connectionFromMap)
-              .toList(),
+      connections: connections,
     );
   }
 
@@ -887,13 +909,13 @@ class CoreService extends GetxService
   @override
   Future<void> closeAll() async {
     await invoke('closeConnections');
-    await _poll(_epoch);
+    await _poll(_epoch, forceDetails: true);
   }
 
   @override
   Future<void> closeConnection(String id) async {
     await invoke('closeConnection', id);
-    await _poll(_epoch);
+    await _poll(_epoch, forceDetails: true);
   }
 
   Future<void> updateProvider(String name) async {

@@ -41,14 +41,51 @@ func init() {
 
 // Every dial through a looping dialer fails; one report stands for the burst.
 const dialerLoopReportInterval = 3 * time.Second
+const dialerLoopReportCacheSize = 1024
 
-var dialerLoopReports sync.Map
+type dialerLoopReportCache struct {
+	mu      sync.Mutex
+	entries map[string]time.Time
+}
+
+func (cache *dialerLoopReportCache) shouldReport(
+	proxyName string,
+	now time.Time,
+) bool {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	if cache.entries == nil {
+		cache.entries = make(map[string]time.Time)
+	}
+	for name, last := range cache.entries {
+		if now.Sub(last) >= dialerLoopReportInterval {
+			delete(cache.entries, name)
+		}
+	}
+	if last, ok := cache.entries[proxyName]; ok && now.Sub(last) < dialerLoopReportInterval {
+		return false
+	}
+	if len(cache.entries) >= dialerLoopReportCacheSize {
+		var oldestName string
+		var oldest time.Time
+		for name, last := range cache.entries {
+			if oldestName == "" || last.Before(oldest) {
+				oldestName, oldest = name, last
+			}
+		}
+		delete(cache.entries, oldestName)
+	}
+	cache.entries[proxyName] = now
+	return true
+}
+
+var dialerLoopReports dialerLoopReportCache
 
 func reportDialerLoop(proxyName string) {
 	now := time.Now()
-	if last, ok := dialerLoopReports.Load(proxyName); ok && now.Sub(last.(time.Time)) < dialerLoopReportInterval {
+	if !dialerLoopReports.shouldReport(proxyName, now) {
 		return
 	}
-	dialerLoopReports.Store(proxyName, now)
 	sendMessage(DialerLoopMessage, proxyName)
 }

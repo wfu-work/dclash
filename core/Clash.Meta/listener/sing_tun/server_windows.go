@@ -27,6 +27,10 @@ func tunNew(options tun.Options) (tunIf tun.Tun, err error) {
 }
 
 func init() {
+	// Give DClash a private, stable Wintun adapter prefix.  The privileged
+	// Helper uses the same prefix to remove routes and DNS settings after a
+	// hard Core termination.
+	InterfaceName = "DClash"
 	tun.TunnelType = InterfaceName
 
 	if features.WindowsMajorVersion < 10 {

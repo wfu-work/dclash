@@ -10,6 +10,7 @@ class LogsController extends GetxController {
   final level = 'all'.obs;
   final paused = false.obs;
   List<CoreLog> _snapshot = [];
+  final Expando<String> _normalizedMessages = Expando<String>();
 
   List<CoreLog> get visibleLogs {
     final search = query.value.trim().toLowerCase();
@@ -20,9 +21,17 @@ class LogsController extends GetxController {
                   log.level.toLowerCase() == level.value ||
                   (level.value == 'warning' &&
                       log.level.toLowerCase() == 'warn')) &&
-              (search.isEmpty || log.message.toLowerCase().contains(search)),
+              (search.isEmpty || _normalizedMessage(log).contains(search)),
         )
         .toList();
+  }
+
+  String _normalizedMessage(CoreLog log) {
+    final cached = _normalizedMessages[log];
+    if (cached != null) return cached;
+    final value = log.message.toLowerCase();
+    _normalizedMessages[log] = value;
+    return value;
   }
 
   void togglePause() {

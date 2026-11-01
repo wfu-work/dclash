@@ -23,4 +23,8 @@ abstract class ProxyPlatform extends PlatformInterface {
   Future<bool> stopProxy() {
     throw UnimplementedError('stopProxy() has not been implemented.');
   }
+
+  Future<bool> recoverStaleProxy(int port) {
+    throw UnimplementedError('recoverStaleProxy() has not been implemented.');
+  }
 }

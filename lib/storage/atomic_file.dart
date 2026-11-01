@@ -32,9 +32,27 @@ Future<void> writePrivateAtomic(File target, List<int> bytes) async {
     } finally {
       await handle.close();
     }
-    await temporary.rename(target.path);
+    await _renameOver(temporary, target);
   } finally {
     if (await temporary.exists()) await temporary.delete();
+  }
+}
+
+/// Renames [from] to [to], replacing an existing file where the platform
+/// allows it.
+///
+/// Windows' `MoveFileEx` semantics exposed by `dart:io` do not replace an
+/// existing destination for [File.rename].  The temporary file is already
+/// fully flushed before this function is called, so deleting the old target
+/// and retrying the rename keeps repeated writes working on Windows without
+/// exposing a partially written file.
+Future<void> _renameOver(File from, File to) async {
+  try {
+    await from.rename(to.path);
+  } on FileSystemException {
+    if (!Platform.isWindows || !await to.exists()) rethrow;
+    await to.delete();
+    await from.rename(to.path);
   }
 }
 

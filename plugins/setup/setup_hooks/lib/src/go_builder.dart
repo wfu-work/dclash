@@ -83,15 +83,20 @@ class GoBuilder {
   // linker can set it for every reader.
   static const _versionSymbol = 'github.com/metacubex/mihomo/constant.Version';
 
-  String _ldflags() => [
+  String _ldflags(Target target) => [
     config.goLdflags,
+    // The desktop runner is a GUI process.  Mark the Windows sidecar as a
+    // Windows GUI subsystem binary so starting it from Flutter does not open
+    // a transient console window.  It still inherits the stdout/stderr pipes
+    // supplied by Process.start and therefore remains observable by the app.
+    if (target.goos == 'windows') '-H=windowsgui',
     if (config.coreVersion.isNotEmpty)
       '-X $_versionSymbol=${config.coreVersion}',
   ].join(' ');
 
   List<String> _buildArguments(Target target, {String? outFile}) => [
     'build',
-    '-ldflags=${_ldflags()}',
+    '-ldflags=${_ldflags(target)}',
     '-tags=${config.tags}',
     if (outFile != null) ...['-o', outFile],
     _mainPackage,

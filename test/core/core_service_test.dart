@@ -341,7 +341,27 @@ void main() {
   test(
     'background refresh slows polling without recreating the runtime',
     () async {
-      final runtime = TestRuntime();
+      final runtime = TestRuntime()
+        ..connectionSnapshot = {
+          'connections': [
+            {
+              'id': 'connection-1',
+              'start': DateTime(2026, 10, 24).toIso8601String(),
+              'metadata': {
+                'host': 'example.com',
+                'network': 'tcp',
+                'sourceIP': '127.0.0.1',
+                'sourcePort': 1234,
+                'destinationIP': '203.0.113.1',
+                'destinationPort': 443,
+              },
+              'rule': 'MATCH',
+              'chains': ['DIRECT'],
+              'upload': 10,
+              'download': 20,
+            },
+          ],
+        };
       var creations = 0;
       final service = CoreService(
         TestProfiles(),
@@ -355,13 +375,38 @@ void main() {
       await service.initialize();
       addTearDown(service.disposeRuntime);
       await service.start();
+      expect(service.trafficUpdate.value?.connections, hasLength(1));
       final initialPolls = runtime.calls
           .where((call) => call == 'getMemoryStats')
+          .length;
+      final initialTrafficPolls = runtime.calls
+          .where((call) => call == 'getTraffic')
+          .length;
+      final initialConnectionPolls = runtime.calls
+          .where((call) => call == 'getConnections')
           .length;
       await Future<void>.delayed(const Duration(milliseconds: 1200));
       expect(
         runtime.calls.where((call) => call == 'getMemoryStats').length,
+        initialPolls,
+      );
+      expect(
+        runtime.calls.where((call) => call == 'getTraffic').length,
+        greaterThan(initialTrafficPolls),
+      );
+      expect(
+        runtime.calls.where((call) => call == 'getConnections').length,
+        initialConnectionPolls,
+      );
+      expect(service.trafficUpdate.value?.connections, hasLength(1));
+      await Future<void>.delayed(const Duration(milliseconds: 4200));
+      expect(
+        runtime.calls.where((call) => call == 'getMemoryStats').length,
         greaterThan(initialPolls),
+      );
+      expect(
+        runtime.calls.where((call) => call == 'getConnections').length,
+        greaterThan(initialConnectionPolls),
       );
       service.setForeground(false);
       final backgroundPolls = runtime.calls

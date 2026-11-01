@@ -63,4 +63,4 @@ dart tool/test.dart --no-pub --dart-define=DC_NATIVE_SCRIPT_SMOKE=true test/nati
 
 Android APK 未安装或运行，应用枚举权限、VPN 授权及真实流量需在目标设备验证。Windows / Linux 尚未在对应宿主构建或运行；iOS 未实现。系统代理恢复、TUN 路由、管理员授权、辅助服务安装、开机启动和原生文件选择器仍需平台验收。
 
-Linux / Windows 的当前系统代理清理会关闭本应用设置的代理，尚不具备 macOS 已实现的完整旧设置快照与恢复。FlClash 备份格式的直接互通未验证；当前备份采用 Cloudrift 自身格式。完整功能差异和后续补齐项以 [功能对照](feature-parity.md) 为准。
+Windows 代理实现现在会分别保存默认连接和 RAS 连接的 WinINet flags、代理服务器、绕过列表、PAC 与自动发现设置，并在正常停止、会话结束和启动时按目标端口恢复或清理；Linux 仍沿用命令行代理的直接停止逻辑。Windows / Linux 仍未在宿主机完成真实启动和网络接管验收。FlClash 备份格式的直接互通未验证；当前备份采用 Cloudrift 自身格式。完整功能差异和后续补齐项以 [功能对照](feature-parity.md) 为准。

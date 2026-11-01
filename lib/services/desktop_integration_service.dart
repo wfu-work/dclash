@@ -451,13 +451,10 @@ class DesktopIntegrationService extends GetxService with WindowListener {
   void onWindowShouldTerminate() => unawaited(quit());
 
   Future<void> _recoverSystemProxy() async {
-    if (preview || !Platform.isMacOS) return;
+    if (preview || !(Platform.isMacOS || Platform.isWindows)) return;
     final port = (settings.fields['mixedPort'] as num?)?.toInt() ?? 7890;
     if (!await Proxy().recoverStaleProxy(port)) {
-      throw const CoreException(
-        'system_proxy',
-        '无法恢复系统网络代理，请在 macOS 网络设置中检查 HTTP、HTTPS 和 SOCKS 代理后重试。',
-      );
+      throw const CoreException('system_proxy', '无法恢复系统网络代理，请检查系统网络代理设置后重试。');
     }
   }
 
