@@ -4,6 +4,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/metacubex/mihomo/adapter/outbound"
 	"github.com/metacubex/mihomo/constant"
@@ -135,5 +136,36 @@ func TestRequestTrafficGivesUpOnAClosedRequestItCannotReport(t *testing.T) {
 	}
 	if watch.collect(closed, dropped) {
 		t.Fatal("a closed request outlived its retries")
+	}
+}
+
+func TestRequestTrafficDoesNotHoldLockWhileQueueing(t *testing.T) {
+	tracker := newPipeTracker(t)
+	newTracker := newPipeTracker(t)
+	watch := requestTrafficWatch{requests: map[string]*watchedRequest{}}
+	watch.add(tracker)
+	if _, err := tracker.Write([]byte("traffic")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- watch.collect(
+			func(string) bool { return true },
+			func([]RequestTraffic) bool {
+				// add needs the same mutex as collect. Keeping this callback outside
+				// the lock prevents a new request from blocking the watcher.
+				watch.add(newTracker)
+				return true
+			},
+		)
+	}()
+	select {
+	case watching := <-done:
+		if !watching {
+			t.Fatal("adding a request while queueing stopped the watcher")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("collect blocked while queueing a report")
 	}
 }

@@ -14,6 +14,22 @@ import 'package:dclash_flutter/services/traffic_statistics_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
+Map<String, dynamic> proxySnapshot(String selected) => {
+  'all': ['Proxy', 'Auto'],
+  'proxies': {
+    'Proxy': {
+      'type': 'Selector',
+      'now': selected,
+      'all': ['Tokyo', 'Seoul'],
+    },
+    'Auto': {
+      'type': 'URLTest',
+      'now': 'Seoul',
+      'all': ['Tokyo', 'Seoul'],
+    },
+  },
+};
+
 class TestProfiles extends ProfileService {
   String content = 'proxies: []\nproxy-groups: []\nrules:\n  - MATCH,DIRECT\n';
   ClashProfile current = const ClashProfile(
@@ -45,6 +61,9 @@ class TestRuntime implements CoreRuntime {
   };
   String setupMessage = '';
   Map<String, dynamic>? setupArguments;
+  Future<dynamic> Function()? readProxies;
+  Completer<void>? changeProxyGate;
+  Map<String, dynamic> proxySnapshot = {'proxies': {}, 'all': []};
   bool failTrafficBaseline = false;
   bool crashOnStart = false;
   Map<String, dynamic> trafficTotals = {'up': 0, 'down': 0};
@@ -103,8 +122,9 @@ class TestRuntime implements CoreRuntime {
     if (method == 'setupConfig' && arguments is Map) {
       setupArguments = Map<String, dynamic>.from(arguments);
     }
+    if (method == 'changeProxy') await changeProxyGate?.future;
     return switch (method) {
-      'getProxies' => {'proxies': {}, 'all': []},
+      'getProxies' => readProxies?.call() ?? proxySnapshot,
       'getExternalProviders' => [],
       'getConnections' => connectionSnapshot,
       'getTotalTraffic' => trafficTotals,
@@ -286,6 +306,65 @@ void main() {
     },
   );
   test(
+    'request traffic batches list notifications and skips unchanged counters',
+    () async {
+      final runtime = TestRuntime();
+      final service = CoreService(
+        TestProfiles(),
+        settings,
+        runtimeFactory: () => runtime,
+        supportDirectory: () async => directory,
+      );
+      await service.initialize();
+      addTearDown(service.disposeRuntime);
+      await service.start();
+
+      var notifications = 0;
+      final subscription = service.requests.listen((_) => notifications++);
+      addTearDown(subscription.cancel);
+      notifications = 0;
+      for (final id in ['one', 'two']) {
+        runtime.controller.add({
+          'type': 'request',
+          'data': {
+            'id': id,
+            'start': DateTime.now().toIso8601String(),
+            'metadata': {'host': '$id.example.com'},
+            'upload': 0,
+            'download': 0,
+            'chains': const <String>[],
+          },
+        });
+      }
+      await Future<void>.delayed(Duration.zero);
+      notifications = 0;
+
+      runtime.controller.add({
+        'type': 'requestTraffic',
+        'data': [
+          {'id': 'one', 'upload': 10, 'download': 20},
+          {'id': 'two', 'upload': 30, 'download': 40},
+        ],
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 1);
+      expect(service.requests, hasLength(2));
+      expect(service.requests[0]['upload'], 10);
+      expect(service.requests[1]['download'], 40);
+
+      notifications = 0;
+      runtime.controller.add({
+        'type': 'requestTraffic',
+        'data': [
+          {'id': 'one', 'upload': 10, 'download': 20},
+          {'id': 'two', 'upload': 30, 'download': 40},
+        ],
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(notifications, 0);
+    },
+  );
+  test(
     'an unavailable statistics baseline does not prevent connecting',
     () async {
       final runtime = TestRuntime()..failTrafficBaseline = true;
@@ -322,6 +401,106 @@ void main() {
     expect(runtimes[1].setupArguments?['selected-map'], {'GLOBAL': 'Tokyo'});
     await service.disposeRuntime();
   });
+  test(
+    'profile reload restores explicit choices instead of the UI snapshot',
+    () async {
+      final runtime = TestRuntime()..proxySnapshot = proxySnapshot('Tokyo');
+      final service = CoreService(
+        TestProfiles(),
+        settings,
+        runtimeFactory: () => runtime,
+        supportDirectory: () async => directory,
+      );
+      addTearDown(service.disposeRuntime);
+      await service.initialize();
+      await service.start();
+      await service.selectProxy('Proxy', 'Seoul');
+      // The UI can still contain a response captured before the native change.
+      expect(service.groups.first.selected, 'Tokyo');
+      await service.reload();
+      expect(runtime.setupArguments?['selected-map'], {'Proxy': 'Seoul'});
+      expect(runtime.calls.where((call) => call == 'open'), hasLength(1));
+    },
+  );
+  test(
+    'a late runtime refresh cannot replace a newer proxy snapshot',
+    () async {
+      final runtime = TestRuntime()..proxySnapshot = proxySnapshot('Tokyo');
+      final service = CoreService(
+        TestProfiles(),
+        settings,
+        runtimeFactory: () => runtime,
+        supportDirectory: () async => directory,
+      );
+      addTearDown(service.disposeRuntime);
+      await service.start();
+      final first = Completer<dynamic>();
+      final second = Completer<dynamic>();
+      var reads = 0;
+      runtime.readProxies = () => reads++ == 0 ? first.future : second.future;
+      final older = service.refreshRuntime();
+      final newer = service.refreshRuntime();
+      second.complete(proxySnapshot('Seoul'));
+      await newer;
+      expect(service.groups.first.selected, 'Seoul');
+      first.complete(proxySnapshot('Tokyo'));
+      await older;
+      expect(service.groups.first.selected, 'Seoul');
+    },
+  );
+  test('selecting invalidates refreshes already in flight', () async {
+    final runtime = TestRuntime()..proxySnapshot = proxySnapshot('Seoul');
+    final service = CoreService(
+      TestProfiles(),
+      settings,
+      runtimeFactory: () => runtime,
+      supportDirectory: () async => directory,
+    );
+    addTearDown(service.disposeRuntime);
+    await service.start();
+    final stale = Completer<dynamic>();
+    runtime.readProxies = () => stale.future;
+    final older = service.refreshRuntime();
+    runtime.changeProxyGate = Completer<void>();
+    final selection = service.selectProxy('Proxy', 'Seoul');
+    stale.complete(proxySnapshot('Tokyo'));
+    await older;
+    expect(service.groups.first.selected, 'Seoul');
+    runtime.readProxies = null;
+    runtime.proxySnapshot = proxySnapshot('Seoul');
+    runtime.changeProxyGate!.complete();
+    await selection;
+    expect(service.groups.first.selected, 'Seoul');
+  });
+  test(
+    'a pending selection is saved against the profile it was applied to',
+    () async {
+      final runtime = TestRuntime();
+      final profiles = TestProfiles();
+      final service = CoreService(
+        profiles,
+        settings,
+        runtimeFactory: () => runtime,
+        supportDirectory: () async => directory,
+      );
+      addTearDown(service.disposeRuntime);
+      await service.start();
+      runtime.changeProxyGate = Completer<void>();
+      final selection = service.selectProxy('Proxy', 'Seoul');
+      profiles.current = const ClashProfile(
+        id: 'other-profile',
+        name: 'Other profile',
+        source: ProfileSource.custom,
+        path: 'other.yaml',
+      );
+      runtime.changeProxyGate!.complete();
+      await selection;
+      final saved =
+          jsonDecode(settings.fields['proxySelections'] as String) as Map;
+      expect(saved['fixture'], {'Proxy': 'Seoul'});
+      expect(saved.containsKey('other-profile'), isFalse);
+    },
+  );
   test(
     'runtime polling prefers the core process RSS for memory usage',
     () async {
@@ -536,6 +715,9 @@ void main() {
       );
       await service.initialize();
       await service.start();
+      var logNotifications = 0;
+      final logSubscription = service.logs.listen((_) => logNotifications++);
+      addTearDown(logSubscription.cancel);
       for (var i = 0; i < 1200; i++) {
         runtime.controller.add({
           'type': 'log',
@@ -545,6 +727,14 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(service.logs.length, 1000);
       expect(service.logs.first.message, 'fixture 200');
+      logNotifications = 0;
+      runtime.controller.add({
+        'type': 'log',
+        'data': {'Payload': 'fixture overflow'},
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(logNotifications, 1);
+      expect(service.logs.last.message, 'fixture overflow');
       await service.disposeRuntime();
       final broken = TestRuntime()
         ..openError = const CoreException(

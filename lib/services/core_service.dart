@@ -101,6 +101,7 @@ class CoreService extends GetxService
   int _recoveryGeneration = 0;
   static const _maxRecoveryAttempts = 3;
   int _epoch = 0;
+  int _runtimeRefreshRevision = 0;
   String _appliedSettings = '';
   String _desiredFingerprint = '';
   String? _appliedProfile;
@@ -369,9 +370,9 @@ class CoreService extends GetxService
       try {
         _messageResult(
           await invoke('setupConfig', {
-            'selected-map': {
-              for (final group in groups) group.name: group.selected,
-            },
+            // A UI snapshot may be stale and an automatic group's current
+            // node is not a manual override. Restore only explicit choices.
+            'selected-map': _savedProxySelections(profile.id),
             'test-url':
                 fields['testUrl'] ?? 'https://www.gstatic.com/generate_204',
           }),
@@ -521,11 +522,16 @@ class CoreService extends GetxService
   Future<void> refreshRuntime() async {
     if (_runtime == null) return;
     final epoch = _epoch;
+    final revision = ++_runtimeRefreshRevision;
     final results = await Future.wait([
       invoke('getProxies'),
       invoke('getExternalProviders'),
     ]);
-    if (_runtime == null || epoch != _epoch) return;
+    if (_runtime == null ||
+        epoch != _epoch ||
+        revision != _runtimeRefreshRevision) {
+      return;
+    }
     final proxyData = _map(results[0]);
     final map = _map(proxyData['proxies']);
     final names = proxyData['all'] as List? ?? map.keys.toList();
@@ -669,7 +675,11 @@ class CoreService extends GetxService
 
   void _handleEvent(Map<String, dynamic> event) {
     final type = event['type'];
-    final data = _map(event['data']);
+    // CoreRpc already decodes JSON objects as Map<String, dynamic>. Reuse
+    // that map for the common request/log/DNS path instead of copying every
+    // event; only adapt non-JSON map implementations or malformed payloads.
+    final rawData = event['data'];
+    final data = rawData is Map<String, dynamic> ? rawData : _map(rawData);
     switch (type) {
       case 'log':
         _append(
@@ -711,22 +721,37 @@ class CoreService extends GetxService
                 ),
             ],
           );
-          final byId = <String, Map<String, dynamic>>{
-            for (final raw in updates.whereType<Map>())
-              '${raw['id']}': Map<String, dynamic>.from(raw),
+          // The decoded event owns these read-only payload maps. Keep the
+          // references in the lookup table instead of copying every update;
+          // request records themselves are copied below before publication.
+          final byId = <String, Map>{
+            for (final raw in updates.whereType<Map>()) '${raw['id']}': raw,
           };
-          var changed = false;
+          // RxList's indexed setter refreshes the list immediately. A single
+          // requestTraffic event can contain many connections, so mutating
+          // requests[i] in the loop causes one notification per connection
+          // followed by another refresh. Build the changed snapshot first and
+          // publish it once to keep rebuilds and allocations bounded per
+          // event.
+          List<Map<String, dynamic>>? updatedRequests;
           for (var i = 0; i < requests.length; i++) {
-            final delta = byId['${requests[i]['id']}'];
-            if (delta == null) continue;
-            requests[i] = {
-              ...requests[i],
+            final request = requests[i];
+            final delta = byId['${request['id']}'];
+            if (delta == null ||
+                (request['upload'] == delta['upload'] &&
+                    request['download'] == delta['download'])) {
+              continue;
+            }
+            updatedRequests ??= List<Map<String, dynamic>>.of(requests);
+            updatedRequests[i] = {
+              ...request,
               'upload': delta['upload'],
               'download': delta['download'],
             };
-            changed = true;
           }
-          if (changed) requests.refresh();
+          // assignAll() calls clear() and addAll(), which each refresh an
+          // RxList in GetX. Assigning the new backing list emits once.
+          if (updatedRequests != null) requests.value = updatedRequests;
         }
       case 'geoUpdate':
         if (data['error'] is String && (data['error'] as String).isNotEmpty) {
@@ -801,12 +826,17 @@ class CoreService extends GetxService
 
   @override
   Future<void> selectProxy(String group, String name) async {
+    final profileId = _appliedProfile ?? profiles.active?.id;
+    final epoch = _epoch;
+    // Invalidate snapshots requested before this selection, even while the
+    // change RPC and the settings write are still in flight.
+    _runtimeRefreshRevision++;
     final response = _map(
       await invoke('changeProxy', {'group-name': group, 'proxy-name': name}),
     );
     _messageResult(response['message']);
-    await _rememberProxySelection(group, name);
-    await refreshRuntime();
+    await _rememberProxySelection(profileId, group, name);
+    if (epoch == _epoch) await refreshRuntime();
   }
 
   Map<String, String> _savedProxySelections(String profileId) {
@@ -827,8 +857,11 @@ class CoreService extends GetxService
     }
   }
 
-  Future<void> _rememberProxySelection(String group, String name) async {
-    final profileId = profiles.active?.id;
+  Future<void> _rememberProxySelection(
+    String? profileId,
+    String group,
+    String name,
+  ) async {
     if (profileId == null || group.isEmpty || name.isEmpty) return;
     final write = _selectionWrites.then(
       (_) => _persistProxySelection(profileId, group, name),
@@ -1191,7 +1224,20 @@ class CoreService extends GetxService
   static int _integer(dynamic value) =>
       value is num ? value.toInt() : int.tryParse('$value') ?? 0;
   static void _append<T>(RxList<T> list, T value, int limit) {
-    list.add(value);
-    if (list.length > limit) list.removeRange(0, list.length - limit);
+    if (list.length < limit) {
+      list.add(value);
+      return;
+    }
+    // RxList's inherited removeRange/setter can emit once per mutation. At
+    // the retention limit, mutate its backing list and publish one refresh so
+    // a busy log/request/DNS stream does not rebuild the UI twice per item.
+    // RxList exposes its backing list through a protected getter. Keeping the
+    // mutation here avoids allocating a second 1000-item list for every
+    // retained event; the single refresh below publishes the completed edit.
+    // ignore: invalid_use_of_protected_member
+    final values = list.value;
+    values.removeRange(0, values.length - limit + 1);
+    values.add(value);
+    list.refresh();
   }
 }

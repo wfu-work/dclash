@@ -1,6 +1,40 @@
 import 'dart:io';
 import 'package:dclash_flutter/services/profile_service.dart';
+import 'package:dclash_flutter/utils/bounded_http.dart';
+import 'package:dclash_flutter/utils/yaml_config.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:yaml/yaml.dart';
+
+const mihomoSubscription = '''
+proxies:
+  - name: Test node
+    type: vless
+    server: proxy.example
+    port: 443
+    uuid: 2a70e3a9-b4ce-4f20-908d-e99950a0a611
+    network: tcp
+    tls: true
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies: [Test node]
+rules: ["MATCH,Proxy"]
+''';
+
+const legacySubscription = '''
+proxies:
+  - name: Test node
+    type: trojan
+    server: proxy.example
+    port: 8443
+    password: fixture
+    network: ws
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies: [Test node]
+rules: ["MATCH,Proxy"]
+''';
 
 void main() {
   late Directory directory;
@@ -16,6 +50,88 @@ void main() {
     profiles.onClose();
     await directory.delete(recursive: true);
   });
+  test(
+    'subscription import and refresh request the Mihomo node format',
+    () async {
+      // Read the actual build version so a core upgrade cannot silently leave
+      // subscription servers seeing an older client's capabilities.
+      final build =
+          loadYaml(await File('build_config.yaml').readAsString()) as YamlMap;
+      final expectedAgent = 'Clash.Meta/${build['core_version']}';
+      final agents = <String?>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final subscription = server.listen((request) async {
+        final agent = request.headers.value(HttpHeaders.userAgentHeader);
+        agents.add(agent);
+        request.response.write(
+          agent == expectedAgent ? mihomoSubscription : legacySubscription,
+        );
+        await request.response.close();
+      });
+      addTearDown(() async {
+        await subscription.cancel();
+        await server.close(force: true);
+      });
+
+      final imported = await profiles.importUrl(
+        'http://127.0.0.1:${server.port}/subscription#display-name',
+      );
+      final importedConfig = parseConfig(await profiles.readContent(imported));
+      expect((importedConfig['proxies'] as List).single['type'], 'vless');
+
+      // An existing subscription saved by the old version must upgrade in place
+      // when refreshed, preserving its identity and active selection.
+      await profiles.saveContent(
+        id: imported.id,
+        name: imported.name,
+        content: legacySubscription,
+      );
+      await profiles.refresh(imported.id);
+      expect(profiles.profiles, hasLength(1));
+      expect(profiles.activeId.value, imported.id);
+      final refreshed = parseConfig(
+        await profiles.readContent(profiles.active!),
+      );
+      expect(refreshed['proxies'], importedConfig['proxies']);
+      expect(agents, [expectedAgent, expectedAgent]);
+    },
+  );
+  test(
+    'subscription redirects retain the format without changing other downloads',
+    () async {
+      final build =
+          loadYaml(await File('build_config.yaml').readAsString()) as YamlMap;
+      final expectedAgent = 'Clash.Meta/${build['core_version']}';
+      final requests = <(String, String?)>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final subscription = server.listen((request) async {
+        requests.add((
+          request.uri.path,
+          request.headers.value(HttpHeaders.userAgentHeader),
+        ));
+        if (request.uri.path == '/subscription') {
+          request.response.statusCode = HttpStatus.found;
+          request.response.headers.set(HttpHeaders.locationHeader, '/download');
+        } else {
+          request.response.write('proxies: []');
+        }
+        await request.response.close();
+      });
+      addTearDown(() async {
+        await subscription.cancel();
+        await server.close(force: true);
+      });
+
+      final base = Uri.parse('http://127.0.0.1:${server.port}');
+      await profiles.importUrl(base.resolve('/subscription').toString());
+      await boundedHttp(base.resolve('/resource'));
+      expect(requests, [
+        ('/subscription', expectedAgent),
+        ('/download', expectedAgent),
+        ('/resource', 'dclash/0.1'),
+      ]);
+    },
+  );
   test(
     'duplicating preserves the override script in the committed copy',
     () async {

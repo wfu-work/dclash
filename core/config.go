@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -133,14 +134,37 @@ func applyConfig(params *SetupParams) error {
 
 	setTestURL(params.TestURL)
 	skipCertVerify.Store(params.SkipCertVerify)
-	currentConfig = cfg
-	hub.ApplyConfig(cfg)
-	patchSelectGroup(params.SelectedMap)
-	bumpRouteEpoch()
+	applyProxyConfig(cfg, params.SelectedMap)
 	updateListeners(cfg)
 	reconcileGeoUpdater()
 	scheduleLoadMemoryRelease()
 	return nil
+}
+
+// Parsing may take a while. Only serialize the swap with selection writes,
+// and take live choices immediately before replacing the proxy objects.
+func applyProxyConfig(cfg *config.Config, requested map[string]string) {
+	selectMu.Lock()
+	defer selectMu.Unlock()
+
+	selected := maps.Clone(requested)
+	if selected == nil {
+		selected = map[string]string{}
+	}
+	if currentConfig != nil {
+		for name, proxy := range tunnel.AllProxies() {
+			if next := cfg.Proxies[name]; next == nil || next.Type() != proxy.Type() {
+				continue
+			}
+			if pick, ok := manualSelection(proxy); ok {
+				selected[name] = pick
+			}
+		}
+	}
+	currentConfig = cfg
+	hub.ApplyConfig(cfg)
+	patchSelectGroupLocked(selected)
+	refreshRouteLocked(true)
 }
 
 func updateConfig(params *UpdateParams) error {

@@ -16,6 +16,10 @@ import '../utils/yaml_config.dart';
 
 class ProfileService extends GetxService {
   ProfileService({this._directory});
+
+  // Subscription servers use this to select Mihomo-compatible protocols.
+  // Keep the version aligned with core_version in build_config.yaml.
+  static const _subscriptionUserAgent = 'Clash.Meta/v1.19.32';
   Directory? _directory;
   Directory get directory => _directory!;
   late ProfileRepository _repository;
@@ -190,7 +194,10 @@ class ProfileService extends GetxService {
     final key = existing?.id ?? uri.toString();
     updating.add(key);
     try {
-      final response = await boundedHttp(uri);
+      final response = await boundedHttp(
+        uri,
+        headers: {HttpHeaders.userAgentHeader: _subscriptionUserAgent},
+      );
       final content = utf8.decode(response.bytes);
       return await _save(
         id: existing?.id,

@@ -12,6 +12,7 @@ import (
 	"github.com/metacubex/mihomo/adapter/outboundgroup"
 	"github.com/metacubex/mihomo/adapter/provider"
 	"github.com/metacubex/mihomo/common/convert"
+	"github.com/metacubex/mihomo/component/profile/cachefile"
 	"github.com/metacubex/mihomo/config"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -83,6 +84,8 @@ func proxyGroupNames(
 }
 
 func handleGetProxies() ProxiesData {
+	selectMu.Lock()
+	defer selectMu.Unlock()
 	proxies := tunnel.AllProxies()
 
 	names := proxyGroupNames(config.GetProxyNameList(), func(name string) (constant.AdapterType, bool) {
@@ -153,6 +156,29 @@ func selectableGroup(groupName string) (pickableGroup, error) {
 	return selector, nil
 }
 
+func manualSelection(proxy constant.Proxy) (string, bool) {
+	group, ok := adapterAs[pickableGroup](proxy)
+	if !ok {
+		return "", false
+	}
+	if proxy.Type() == constant.Selector {
+		return group.Now(), true
+	}
+	// For automatic groups, Now() is a health-check result. Their wire view
+	// exposes the explicit override separately, including an empty reset.
+	data, err := group.MarshalJSON()
+	if err != nil {
+		return "", false
+	}
+	var view struct {
+		Fixed string `json:"fixed"`
+	}
+	if err := json.Unmarshal(data, &view); err != nil {
+		return "", false
+	}
+	return view.Fixed, true
+}
+
 func handleChangeProxy(params *ChangeProxyParams) *ChangeProxyResult {
 	selectMu.Lock()
 	defer selectMu.Unlock()
@@ -167,6 +193,8 @@ func handleChangeProxy(params *ChangeProxyParams) *ChangeProxyResult {
 	} else if err := selector.Set(params.ProxyName); err != nil {
 		return &ChangeProxyResult{Message: err.Error()}
 	}
+	// Match mihomo's controller API: setupConfig also restores this cache.
+	cachefile.Cache().SetSelected(params.GroupName, params.ProxyName)
 	changed := selector.Now() != before
 	refreshRouteLocked(false)
 	return &ChangeProxyResult{Changed: changed}
@@ -175,10 +203,18 @@ func handleChangeProxy(params *ChangeProxyParams) *ChangeProxyResult {
 func patchSelectGroup(mapping map[string]string) {
 	selectMu.Lock()
 	defer selectMu.Unlock()
+	patchSelectGroupLocked(mapping)
+}
+
+func patchSelectGroupLocked(mapping map[string]string) {
 	proxies := tunnel.AllProxies()
+	cached := cachefile.Cache().SelectedMap()
 	for name, selected := range mapping {
 		if selector, ok := adapterAs[outboundgroup.SelectAble](proxies[name]); ok {
 			selector.ForceSet(selected)
+			if previous, ok := cached[name]; !ok || previous != selected {
+				cachefile.Cache().SetSelected(name, selected)
+			}
 		}
 	}
 }
